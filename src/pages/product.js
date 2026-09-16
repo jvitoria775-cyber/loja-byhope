@@ -18,9 +18,9 @@ let selectedSize = null;
 let qty = 1;
 let currentImages = [];
 
-export function render(params, query = {}) {
+export async function render(params, query = {}) {
   const slug = params[0];
-  const product = getCatalogProductBySlug(slug);
+  const product = await getCatalogProductBySlug(slug);
   current = product;
 
   if (!product) {
@@ -42,7 +42,7 @@ export function render(params, query = {}) {
   qty = 1;
   currentImages = getImagesForColor(product, initialColor.slug);
 
-  const related = getCatalogRelated(product);
+  const related = await getCatalogRelated(product);
 
   return `
   <div class="product-detail">

@@ -20,10 +20,10 @@ export function bindGridInteractions(container) {
   });
 
   container.querySelectorAll('[data-quick-add]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.preventDefault();
       const id = btn.getAttribute('data-quick-add');
-      const product = getCatalogProducts().find((p) => p.id === id);
+      const product = (await getCatalogProducts()).find((p) => p.id === id);
       if (!product) return;
 
       const colorSlug = btn.getAttribute('data-quick-add-color');

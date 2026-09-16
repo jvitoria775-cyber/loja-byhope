@@ -6,10 +6,8 @@ import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 
-const CATEGORIES = [
-  { key: '', label: 'Todas' },
-  ...Array.from(getCatalogProducts().reduce((m, p) => m.set(p.category, p.categoryLabel), new Map()), ([value, label]) => ({ key: value, label })),
-];
+let allProducts = [];
+let CATEGORIES = [{ key: '', label: 'Todas' }];
 
 let cart = []; // { productId, colorSlug, colorName, size, qty, price, name, image }
 let activeCategory = '';
@@ -25,7 +23,15 @@ function init() {
   }
 }
 
-function boot() {
+// Carrega o catálogo (com estoque/preço já mesclados) uma única vez ao
+// abrir o PDV - busca/filtro depois disso são instantâneos, sem bater na
+// rede a cada tecla digitada.
+async function boot() {
+  allProducts = await getCatalogProducts();
+  CATEGORIES = [
+    { key: '', label: 'Todas' },
+    ...Array.from(allProducts.reduce((m, p) => m.set(p.category, p.categoryLabel), new Map()), ([value, label]) => ({ key: value, label })),
+  ];
   render();
 }
 
@@ -84,7 +90,7 @@ function render() {
 
 function renderProductGrid() {
   const grid = document.getElementById('pdv-product-grid');
-  const list = getCatalogProducts().filter((p) => {
+  const list = allProducts.filter((p) => {
     if (activeCategory && p.category !== activeCategory) return false;
     if (searchTerm && !p.name.toLowerCase().includes(searchTerm)) return false;
     return true;
@@ -110,7 +116,7 @@ function renderProductGrid() {
 }
 
 function openVariantModal(productId) {
-  const product = getCatalogProducts().find((p) => p.id === productId);
+  const product = allProducts.find((p) => p.id === productId);
   if (!product) return;
 
   let selectedColor = product.colors[0];
@@ -295,8 +301,9 @@ async function finishSale() {
     subtotal, discount: manualDiscount, shippingDiscount: 0, shippingPrice: 0, total,
   };
 
+  finishBtn.disabled = true;
+
   if (paymentMethod === 'infinitepay') {
-    finishBtn.disabled = true;
     finishBtn.textContent = 'Gerando cobrança...';
     try {
       const items = [{ quantity: 1, price: Math.round(total * 100), description: `Venda balcão ${order.id} — Gratitude Têxtil` }];
@@ -306,7 +313,7 @@ async function finishSale() {
         redirectUrl: `${location.origin}/admin.html`,
         customer: { name: name || undefined, phone_number: phone || undefined },
       });
-      saveOrder(order);
+      await saveOrder(order);
       showPixReceipt(order, url);
     } catch (err) {
       finishBtn.disabled = false;
@@ -316,8 +323,14 @@ async function finishSale() {
     return;
   }
 
-  saveOrder(order);
-  showSuccessReceipt(order);
+  try {
+    await saveOrder(order);
+    showSuccessReceipt(order);
+  } catch (err) {
+    finishBtn.disabled = false;
+    finishBtn.textContent = `Finalizar venda — ${formatBRL(total)}`;
+    showToast(err.message || 'Não foi possível registrar a venda. Tente novamente.', 'error');
+  }
 }
 
 function showPixReceipt(order, paymentUrl) {

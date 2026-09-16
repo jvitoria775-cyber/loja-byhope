@@ -1,14 +1,15 @@
 // Gerador de dados de demonstração para o painel administrativo.
-// Cria um histórico de pedidos realista (últimos ~45 dias) usando os
-// PRODUTOS REAIS do catálogo (data/products.js), para que Visão Geral,
-// Clientes e Financeiro já apareçam prontos para teste. Roda apenas uma
-// vez (controlado pela flag amara:demo_seeded) e pode ser refeito ou
-// limpo a qualquer momento na tela de Configurações.
+// Continua usando os PRODUTOS REAIS do catálogo (data/products.js) para
+// montar pedidos de teste realistas - mas agora, em vez de gravar direto
+// no localStorage, envia o lote pronto para /api/demo, que grava no banco
+// compartilhado (marcados com demo:true, para poder limpar só esses depois).
+//
+// Diferente da versão local: NÃO roda mais sozinho ao abrir o painel. Popular
+// pedidos fictícios automaticamente deixa de fazer sentido quando o banco é
+// compartilhado e pode conter pedidos reais de clientes - agora é sempre uma
+// ação manual, pelo botão em Configurações.
 import { products } from '../data/products.js';
-import { getItem, setItem, removeItem } from '../utils/storage.js';
-
-const SEED_FLAG = 'demo_seeded';
-const ORDER_PREFIX = 'order:';
+import { apiPost, apiDelete } from './apiClient.js';
 
 const FIRST_NAMES_F = ['Ana', 'Mariana', 'Camila', 'Fernanda', 'Juliana', 'Beatriz', 'Larissa', 'Patrícia', 'Gabriela', 'Rafaela', 'Carolina', 'Amanda', 'Bruna', 'Letícia', 'Vanessa'];
 const FIRST_NAMES_M = ['Lucas', 'Pedro', 'Gustavo', 'Rafael', 'Thiago', 'Bruno', 'Felipe', 'Rodrigo', 'André', 'Diego', 'Marcelo', 'Eduardo', 'Vinícius', 'Gabriel', 'Leonardo'];
@@ -100,35 +101,20 @@ function buildOrder(dayOffset, channel) {
   };
 }
 
-export function isSeeded() {
-  return getItem(SEED_FLAG, false) === true;
+export function hasDemoOrders(orders) {
+  return orders.some((o) => o.demo);
 }
 
-export function seedDemoData(count = 46) {
+export async function seedDemoData(count = 46) {
+  const orders = [];
   for (let i = 0; i < count; i++) {
     const dayOffset = randInt(0, 45);
     const channel = Math.random() < 0.68 ? 'online' : 'pdv';
-    const order = buildOrder(dayOffset, channel);
-    setItem(`${ORDER_PREFIX}${order.id}`, order);
+    orders.push(buildOrder(dayOffset, channel));
   }
-  setItem(SEED_FLAG, true);
+  await apiPost('/demo', { orders });
 }
 
-export function clearDemoData() {
-  const keys = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith('amara:order:')) {
-      try {
-        const order = JSON.parse(localStorage.getItem(key));
-        if (order && order.demo) keys.push(key.replace('amara:', ''));
-      } catch { /* ignore */ }
-    }
-  }
-  keys.forEach((k) => removeItem(k));
-  setItem(SEED_FLAG, false);
-}
-
-export function ensureSeeded() {
-  if (!isSeeded()) seedDemoData();
+export async function clearDemoData() {
+  await apiDelete('/demo');
 }

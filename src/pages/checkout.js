@@ -192,7 +192,6 @@ export function afterRender() {
 
     const data = Object.fromEntries(new FormData(form).entries());
     const order = buildOrder(data);
-    setItem(`order:${order.id}`, order);
 
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalLabel = submitBtn.textContent;
@@ -200,6 +199,13 @@ export function afterRender() {
     submitBtn.textContent = 'Gerando pagamento seguro...';
 
     try {
+      const createRes = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order),
+      });
+      if (!createRes.ok) throw new Error('Não foi possível registrar o pedido. Tente novamente.');
+
       const totalPeças = order.items.reduce((s, i) => s + i.qty, 0);
       const items = [{
         quantity: 1,

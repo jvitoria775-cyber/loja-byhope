@@ -1,14 +1,15 @@
-import { getAdminProducts, updateProductStock, updateProductPrice, updateProductPromoPrice, addMockProduct, deleteMockProduct, hideOfficialProduct, PRODUCT_COSTS } from '../productAdminStore.js';
+import { getAdminProducts, updateProductStockForColor, updateProductPrice, updateProductPromoPrice, addMockProduct, deleteMockProduct, hideOfficialProduct, PRODUCT_COSTS } from '../productAdminStore.js';
 import { formatBRL, calcDiscountPercent } from '../../utils/format.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
 
 const LOW_STOCK_THRESHOLD = 10;
 let state = { search: '', category: '' };
+let allProducts = [];
 
 export async function render() {
-  const products = getAdminProducts();
-  const categories = Array.from(new Set(products.map((p) => p.category))).filter(Boolean);
+  allProducts = await getAdminProducts();
+  const categories = Array.from(new Set(allProducts.map((p) => p.category))).filter(Boolean);
 
   return `
     <div class="panel">
@@ -16,7 +17,7 @@ export async function render() {
         <input type="search" id="search-input" placeholder="Buscar por nome ou SKU..." value="${escapeHtml(state.search)}" />
         <select id="category-filter">
           <option value="">Todas as categorias</option>
-          ${categories.map((c) => `<option value="${c}" ${state.category === c ? 'selected' : ''}>${escapeHtml(products.find((p) => p.category === c)?.categoryLabel || c)}</option>`).join('')}
+          ${categories.map((c) => `<option value="${c}" ${state.category === c ? 'selected' : ''}>${escapeHtml(allProducts.find((p) => p.category === c)?.categoryLabel || c)}</option>`).join('')}
         </select>
         <button type="button" class="btn btn-primary btn-sm" id="new-product-btn">${icon('plus', 'icon icon-sm')} Novo produto</button>
       </div>
@@ -37,7 +38,7 @@ function priceCellHtml(p) {
 }
 
 function getFiltered() {
-  return getAdminProducts().filter((p) => {
+  return allProducts.filter((p) => {
     if (state.category && p.category !== state.category) return false;
     if (state.search) {
       const term = state.search.toLowerCase();
@@ -83,7 +84,7 @@ function renderTable() {
 }
 
 function openEditModal(id) {
-  const product = getAdminProducts().find((p) => p.id === id);
+  const product = allProducts.find((p) => p.id === id);
   if (!product) return;
   const root = document.getElementById('product-modal-root');
   let activeColorSlug = product.colors?.[0]?.slug || null;
@@ -108,30 +109,30 @@ function openEditModal(id) {
 
   // Salva os valores atualmente visíveis na grade (da cor ativa) antes de
   // trocar de cor ou fechar o modal, para nunca perder uma edição feita
-  // mas não confirmada explicitamente.
-  function persistCurrentStockInputs() {
+  // mas não confirmada explicitamente. Todos os tamanhos da cor vão em UMA
+  // chamada só (evita corrida entre escritas paralelas na mesma linha).
+  async function persistCurrentStockInputs() {
     if (!activeColorSlug) return;
+    const sizeQtyMap = {};
     document.querySelectorAll('#stock-section [data-size]').forEach((input) => {
-      const size = input.getAttribute('data-size');
-      const qty = Number(input.value) || 0;
-      updateProductStock(product.id, activeColorSlug, size, qty);
-      product.stockByColorSize[activeColorSlug] = product.stockByColorSize[activeColorSlug] || {};
-      product.stockByColorSize[activeColorSlug][size] = qty;
+      sizeQtyMap[input.getAttribute('data-size')] = Number(input.value) || 0;
     });
+    if (!Object.keys(sizeQtyMap).length) return;
+    await updateProductStockForColor(product.id, activeColorSlug, sizeQtyMap);
+    product.stockByColorSize[activeColorSlug] = { ...(product.stockByColorSize[activeColorSlug] || {}), ...sizeQtyMap };
   }
 
   function bindStockSection() {
-    document.getElementById('save-stock-btn').addEventListener('click', () => {
-      persistCurrentStockInputs();
-      renderTable();
+    document.getElementById('save-stock-btn').addEventListener('click', async () => {
+      await persistCurrentStockInputs();
+      await refresh();
       const note = document.getElementById('stock-saved-note');
-      note.style.display = 'inline';
-      setTimeout(() => { note.style.display = 'none'; }, 2000);
+      if (note) { note.style.display = 'inline'; setTimeout(() => { note.style.display = 'none'; }, 2000); }
     });
   }
 
-  function closeEditModal() {
-    persistCurrentStockInputs();
+  async function closeEditModal() {
+    await persistCurrentStockInputs();
     closeModal();
   }
 
@@ -190,14 +191,14 @@ function openEditModal(id) {
   bindStockSection();
 
   const overlay = document.getElementById('modal-overlay');
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeEditModal(); });
+  overlay.addEventListener('click', async (e) => { if (e.target === overlay) await closeEditModal(); });
   document.getElementById('modal-close').addEventListener('click', closeEditModal);
 
   document.querySelectorAll('#variation-grid [data-color-slug]').forEach((chip) => {
-    chip.addEventListener('click', () => {
+    chip.addEventListener('click', async () => {
       const newSlug = chip.getAttribute('data-color-slug');
       if (newSlug === activeColorSlug) return;
-      persistCurrentStockInputs();
+      await persistCurrentStockInputs();
       activeColorSlug = newSlug;
       document.querySelectorAll('#variation-grid [data-color-slug]').forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
@@ -206,30 +207,30 @@ function openEditModal(id) {
     });
   });
 
-  document.getElementById('edit-price-form').addEventListener('submit', (e) => {
+  document.getElementById('edit-price-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = new FormData(e.target);
     const price = Number(data.get('price'));
     if (!Number.isFinite(price) || price < 0) return;
-    updateProductPrice(product.id, price);
+    await updateProductPrice(product.id, price);
     const promoRaw = data.get('promoPrice');
-    updateProductPromoPrice(product.id, promoRaw ? Number(promoRaw) : null);
-    renderTable();
-    closeEditModal();
+    await updateProductPromoPrice(product.id, promoRaw ? Number(promoRaw) : null);
+    await refresh();
+    await closeEditModal();
   });
 
-  document.getElementById('hide-product-btn')?.addEventListener('click', () => {
+  document.getElementById('hide-product-btn')?.addEventListener('click', async () => {
     if (!confirm('Ocultar este produto do painel administrativo? Ele continuará disponível na loja.')) return;
-    hideOfficialProduct(product.id);
-    renderTable();
-    closeEditModal();
+    await hideOfficialProduct(product.id);
+    await refresh();
+    await closeEditModal();
   });
 
-  document.getElementById('delete-mock-btn')?.addEventListener('click', () => {
+  document.getElementById('delete-mock-btn')?.addEventListener('click', async () => {
     if (!confirm('Excluir este produto de demonstração?')) return;
-    deleteMockProduct(product.id);
-    renderTable();
-    closeEditModal();
+    await deleteMockProduct(product.id);
+    await refresh();
+    await closeEditModal();
   });
 }
 
@@ -266,20 +267,25 @@ function openNewProductModal() {
   const overlay = document.getElementById('modal-overlay');
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
   document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('new-product-form').addEventListener('submit', (e) => {
+  document.getElementById('new-product-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     if (!data.name?.trim()) return;
     data.categoryLabel = data.category[0].toUpperCase() + data.category.slice(1);
     if (!data.cost) data.cost = PRODUCT_COSTS[data.category] || 0;
-    addMockProduct(data);
+    await addMockProduct(data);
     closeModal();
-    renderTable();
+    await refresh();
   });
 }
 
 function closeModal() {
   document.getElementById('product-modal-root').innerHTML = '';
+}
+
+async function refresh() {
+  allProducts = await getAdminProducts();
+  renderTable();
 }
 
 export async function afterRender() {

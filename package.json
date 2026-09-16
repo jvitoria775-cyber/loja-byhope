@@ -1,0 +1,10 @@
+{
+  "name": "gratitude-textil",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Loja Gratitude Textil - frontend estatico (sem build step, nao afetado por este package.json) + funcoes serverless em /api na Vercel para banco de dados compartilhado e integracao InfinitePay.",
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}

@@ -1,6 +1,5 @@
 import { isUnlocked, renderGate } from './adminAuth.js';
 import { initAdminRouter } from './adminRouter.js';
-import { ensureSeeded } from './mockData.js';
 
 function init() {
   if (isUnlocked()) {
@@ -11,7 +10,6 @@ function init() {
 }
 
 function boot() {
-  ensureSeeded();
   initAdminRouter();
 }
 

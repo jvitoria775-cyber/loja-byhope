@@ -1,16 +1,10 @@
-import { getItem, setItem } from '../../utils/storage.js';
-import { getPin, setPin } from '../adminAuth.js';
-import { seedDemoData, clearDemoData, isSeeded } from '../mockData.js';
-import { getStoreDiscountPercent, setStoreDiscountPercent } from '../../services/catalogService.js';
+import { changePin } from '../adminAuth.js';
+import { seedDemoData, clearDemoData, hasDemoOrders } from '../mockData.js';
+import { getAllOrders } from '../orderStore.js';
+import { getStoreSettings, saveStoreSettings, getStoreDiscountPercent, setStoreDiscountPercent } from '../settingsStore.js';
 import { setStockForAllProducts } from '../productAdminStore.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
-
-const STORE_KEY = 'store_settings';
-
-function getStoreSettings() {
-  return getItem(STORE_KEY, { name: '', cnpj: '', email: '', phone: '', cep: '', street: '', number: '', city: '', state: '' });
-}
 
 function maskHandle(handle) {
   if (handle.length <= 2) return handle;
@@ -18,8 +12,8 @@ function maskHandle(handle) {
 }
 
 export async function render() {
-  const store = getStoreSettings();
-  const discountPercent = getStoreDiscountPercent();
+  const [store, discountPercent, orders] = await Promise.all([getStoreSettings(), getStoreDiscountPercent(), getAllOrders()]);
+  const seeded = hasDemoOrders(orders);
 
   return `
     <div class="two-col">
@@ -84,7 +78,7 @@ export async function render() {
       <div class="panel">
         <h2>Dados de demonstração</h2>
         <p style="font-size:12.5px;color:var(--color-text-soft);margin-bottom:14px;">O painel foi pré-carregado com pedidos fictícios (marcados como demonstração) para que você possa testar todas as telas. Você pode gerar mais dados ou limpar tudo a qualquer momento — isso não afeta o catálogo real da loja.</p>
-        <p style="font-size:12.5px;margin-bottom:14px;">Status atual: ${isSeeded() ? '<span class="badge-pill badge-pago">Dados de demonstração ativos</span>' : '<span class="badge-pill badge-pendente">Sem dados de demonstração</span>'}</p>
+        <p style="font-size:12.5px;margin-bottom:14px;">Status atual: ${seeded ? '<span class="badge-pill badge-pago">Dados de demonstração ativos</span>' : '<span class="badge-pill badge-pendente">Sem dados de demonstração</span>'}</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button type="button" class="btn btn-outline btn-sm" id="reseed-btn">${icon('refresh', 'icon icon-sm')} Gerar mais pedidos demo</button>
           <button type="button" class="btn btn-outline btn-sm" id="clear-demo-btn" style="color:#B3261E;border-color:#B3261E;">${icon('trash', 'icon icon-sm')} Limpar dados de demonstração</button>
@@ -118,16 +112,19 @@ export async function render() {
 }
 
 export async function afterRender() {
-  document.getElementById('store-form').addEventListener('submit', (e) => {
+  document.getElementById('store-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
-    setItem(STORE_KEY, data);
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    await saveStoreSettings(data);
+    btn.disabled = false;
     const note = document.getElementById('store-saved-note');
     note.style.display = 'inline';
     setTimeout(() => { note.style.display = 'none'; }, 2500);
   });
 
-  document.getElementById('pin-form').addEventListener('submit', (e) => {
+  document.getElementById('pin-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     const errorEl = document.getElementById('pin-error');
@@ -135,47 +132,49 @@ export async function afterRender() {
     errorEl.style.display = 'none';
     savedEl.style.display = 'none';
 
-    if (data.currentPin !== getPin()) {
-      errorEl.textContent = 'PIN atual incorreto.';
-      errorEl.style.display = 'inline';
-      return;
-    }
     if (data.newPin !== data.confirmPin) {
       errorEl.textContent = 'A confirmação não corresponde ao novo PIN.';
       errorEl.style.display = 'inline';
       return;
     }
-    setPin(data.newPin);
-    e.target.reset();
-    savedEl.style.display = 'inline';
-    setTimeout(() => { savedEl.style.display = 'none'; }, 2500);
+    try {
+      await changePin(data.currentPin, data.newPin);
+      e.target.reset();
+      savedEl.style.display = 'inline';
+      setTimeout(() => { savedEl.style.display = 'none'; }, 2500);
+    } catch (err) {
+      errorEl.textContent = err.message || 'PIN atual incorreto.';
+      errorEl.style.display = 'inline';
+    }
   });
 
-  document.getElementById('reseed-btn').addEventListener('click', () => {
-    seedDemoData(20);
+  document.getElementById('reseed-btn').addEventListener('click', async () => {
+    await seedDemoData(20);
     location.hash = '#configuracoes';
     location.reload();
   });
 
-  document.getElementById('clear-demo-btn').addEventListener('click', () => {
+  document.getElementById('clear-demo-btn').addEventListener('click', async () => {
     if (!confirm('Remover todos os pedidos de demonstração? Pedidos reais (feitos pela loja ou PDV) não serão afetados.')) return;
-    clearDemoData();
+    await clearDemoData();
     location.reload();
   });
 
-  document.getElementById('discount-form').addEventListener('submit', (e) => {
+  document.getElementById('discount-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const value = Number(new FormData(e.target).get('discount')) || 0;
-    setStoreDiscountPercent(value);
+    await setStoreDiscountPercent(value);
     const note = document.getElementById('discount-saved-note');
     note.style.display = 'inline';
     setTimeout(() => { location.reload(); }, 700);
   });
 
-  document.getElementById('bulk-stock-btn').addEventListener('click', () => {
+  document.getElementById('bulk-stock-btn').addEventListener('click', async (e) => {
     const qty = Number(document.getElementById('bulk-stock-input').value) || 0;
     if (!confirm(`Definir estoque de ${qty} unidades para TODAS as cores e tamanhos de TODOS os produtos?`)) return;
-    setStockForAllProducts(qty);
+    e.currentTarget.disabled = true;
+    await setStockForAllProducts(qty);
+    e.currentTarget.disabled = false;
     const note = document.getElementById('bulk-stock-note');
     note.style.display = 'inline';
   });

@@ -1,4 +1,3 @@
-import { getItem, setItem } from '../utils/storage.js';
 import { formatBRL, formatDate } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
@@ -11,9 +10,13 @@ const PAYMENT_LABELS = {
 
 let currentOrder = null;
 
-export function render(params, query = {}) {
+export async function render(params, query = {}) {
   const id = params[0];
-  const order = getItem(`order:${id}`, null);
+  let order = null;
+  try {
+    const res = await fetch(`/api/orders/${id}`);
+    if (res.ok) ({ order } = await res.json());
+  } catch { /* rede indisponível - trata como não encontrado abaixo */ }
   currentOrder = order;
 
   if (!order) {
@@ -36,11 +39,15 @@ export function render(params, query = {}) {
   const receiptUrl = query.receipt_url || searchParams.get('receipt_url');
 
   if (captureMethod || transactionNsu) {
-    order.payment.status = 'pago';
-    if (captureMethod) order.payment.method = captureMethod;
-    if (transactionNsu) order.payment.transactionNsu = transactionNsu;
-    if (receiptUrl) order.payment.receiptUrl = receiptUrl;
-    setItem(`order:${id}`, order);
+    try {
+      const res = await fetch(`/api/orders/${id}/confirm-payment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ captureMethod, transactionNsu, receiptUrl }),
+      });
+      if (res.ok) ({ order } = await res.json());
+      currentOrder = order;
+    } catch { /* mantém os dados já carregados se a confirmação falhar */ }
   }
 
   const eta = order.shipping?.days ? `${order.shipping.days} dias úteis` : 'a confirmar';

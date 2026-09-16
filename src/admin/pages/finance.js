@@ -16,6 +16,7 @@ const PAYMENT_FEE_RATE = 0.06;
 const CATEGORY_BY_PRODUCT_ID = new Map(catalogProducts.map((p) => [p.id, p.category]));
 
 let state = { period: '7d', from: '', to: '' };
+let allOrders = [];
 
 function getRange() {
   const now = new Date();
@@ -79,6 +80,7 @@ function computeFinance(orders) {
 }
 
 export async function render() {
+  allOrders = await getAllOrders();
   return `
     <div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
@@ -114,8 +116,7 @@ function renderCustomRange() {
 }
 
 function renderContent() {
-  const orders = getAllOrders();
-  const data = computeFinance(orders);
+  const data = computeFinance(allOrders);
   const el = document.getElementById('finance-content');
 
   el.innerHTML = `
@@ -164,8 +165,7 @@ function renderContent() {
 }
 
 function downloadCsv() {
-  const orders = getAllOrders();
-  const data = computeFinance(orders);
+  const data = computeFinance(allOrders);
   const header = ['Pedido', 'Data', 'Receita (R$)', 'Custo produtos (R$)', 'Imposto (R$)', 'Taxa pagamento (R$)', 'Lucro (R$)'];
   const rows = data.orders.map((o) => {
     const cost = (o.items || []).reduce((s, i) => s + itemCost(i), 0);
@@ -185,8 +185,7 @@ function downloadCsv() {
 }
 
 function printReport() {
-  const orders = getAllOrders();
-  const data = computeFinance(orders);
+  const data = computeFinance(allOrders);
   const win = window.open('', '_blank');
   if (!win) return;
   win.document.write(`

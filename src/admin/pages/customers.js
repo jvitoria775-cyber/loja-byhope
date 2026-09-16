@@ -4,8 +4,10 @@ import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
 
 let state = { search: '' };
+let allCustomers = [];
 
 export async function render() {
+  allCustomers = await getAllCustomers();
   return `
     <div class="panel">
       <div class="table-toolbar">
@@ -22,10 +24,9 @@ export async function render() {
 }
 
 function getFiltered() {
-  const all = getAllCustomers();
-  if (!state.search) return all;
+  if (!state.search) return allCustomers;
   const term = state.search.toLowerCase();
-  return all.filter((c) => `${c.fullName} ${c.email}`.toLowerCase().includes(term));
+  return allCustomers.filter((c) => `${c.fullName} ${c.email}`.toLowerCase().includes(term));
 }
 
 function renderTable() {
@@ -66,7 +67,7 @@ function renderTable() {
 }
 
 function openProfileDrawer(id) {
-  const customer = getAllCustomers().find((c) => c.id === id);
+  const customer = allCustomers.find((c) => c.id === id);
   if (!customer) return;
   const root = document.getElementById('customer-modal-root');
 
@@ -106,8 +107,9 @@ function openProfileDrawer(id) {
   const overlay = document.getElementById('modal-overlay');
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
   document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('remove-customer-btn')?.addEventListener('click', () => {
-    removeManualCustomer(customer.id);
+  document.getElementById('remove-customer-btn')?.addEventListener('click', async () => {
+    await removeManualCustomer(customer.id);
+    allCustomers = await getAllCustomers();
     closeModal();
     renderTable();
   });
@@ -139,11 +141,12 @@ function openNewCustomerModal() {
   const overlay = document.getElementById('modal-overlay');
   overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
   document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('new-customer-form').addEventListener('submit', (e) => {
+  document.getElementById('new-customer-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
     if (!data.firstName?.trim()) return;
-    addManualCustomer(data);
+    await addManualCustomer(data);
+    allCustomers = await getAllCustomers();
     closeModal();
     renderTable();
   });

@@ -9,10 +9,8 @@ import { icon } from '../../components/icons.js';
 let period = 14; // dias exibidos no gráfico de vendas
 
 export async function render() {
-  const orders = getAllOrders();
+  const [orders, customers, lowStock] = await Promise.all([getAllOrders(), getAllCustomers(), getLowStockProducts()]);
   const stats = computeStats(orders);
-  const customers = getAllCustomers();
-  const lowStock = getLowStockProducts();
 
   const thisMonth = new Date();
   thisMonth.setDate(1);
@@ -77,11 +75,11 @@ function statCard(iconName, label, value, sub, warn = false) {
 
 export async function afterRender() {
   document.querySelectorAll('#period-tabs button').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       period = Number(btn.getAttribute('data-period'));
       document.querySelectorAll('#period-tabs button').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('chart-container').innerHTML = renderAreaChart(groupOrdersByDay(getAllOrders(), period));
+      document.getElementById('chart-container').innerHTML = renderAreaChart(groupOrdersByDay(await getAllOrders(), period));
     });
   });
 }

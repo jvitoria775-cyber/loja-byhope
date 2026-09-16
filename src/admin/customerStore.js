@@ -1,37 +1,40 @@
-// "Clientes" não é uma entidade própria hoje (não há backend/banco) - por
-// isso construímos a lista agregando os dados de cliente presentes em cada
-// pedido (agrupando por e-mail) e somando com contatos cadastrados
-// manualmente pela equipe (guardados em amara:customers_manual).
+// "Clientes" continua sendo calculado agregando os pedidos por e-mail +
+// contatos cadastrados manualmente - só que agora os dois vêm do banco
+// compartilhado (via /api/orders e /api/customers) em vez de localStorage.
 import { getAllOrders } from './orderStore.js';
-import { getItem, setItem } from '../utils/storage.js';
+import { apiGet, apiPost, apiDelete } from './apiClient.js';
 
-const MANUAL_KEY = 'customers_manual';
+let _cache = null;
+let _promise = null;
 
-export function getManualCustomers() {
-  return getItem(MANUAL_KEY, []);
+async function loadManual() {
+  if (_cache) return _cache;
+  if (!_promise) {
+    _promise = apiGet('/customers')
+      .then((data) => { _cache = data.customers; return _cache; })
+      .catch((err) => { _promise = null; throw err; });
+  }
+  return _promise;
 }
 
-export function addManualCustomer(data) {
-  const list = getManualCustomers();
-  const customer = {
-    id: `manual-${Date.now()}`,
-    firstName: data.firstName,
-    lastName: data.lastName || '',
-    email: data.email,
-    phone: data.phone || '',
-    city: data.city || '',
-    state: data.state || '',
-    createdAt: new Date().toISOString(),
-    manual: true,
-  };
-  list.push(customer);
-  setItem(MANUAL_KEY, list);
+function invalidateManualCache() {
+  _cache = null;
+  _promise = null;
+}
+
+export async function getManualCustomers() {
+  return loadManual();
+}
+
+export async function addManualCustomer(data) {
+  const { customer } = await apiPost('/customers', data);
+  invalidateManualCache();
   return customer;
 }
 
-export function removeManualCustomer(id) {
-  const list = getManualCustomers().filter((c) => c.id !== id);
-  setItem(MANUAL_KEY, list);
+export async function removeManualCustomer(id) {
+  await apiDelete(`/customers/${id}`);
+  invalidateManualCache();
 }
 
 function initials(name) {
@@ -41,8 +44,8 @@ function initials(name) {
 // Junta pedidos (agrupados por e-mail) + contatos manuais em uma única
 // lista de clientes, com pedidos, LTV (total gasto) e data de cadastro
 // (primeira compra, ou data de criação para contatos manuais).
-export function getAllCustomers() {
-  const orders = getAllOrders();
+export async function getAllCustomers() {
+  const [orders, manual] = await Promise.all([getAllOrders(), getManualCustomers()]);
   const byEmail = new Map();
 
   orders.forEach((order) => {
@@ -66,11 +69,11 @@ export function getAllCustomers() {
 
   const fromOrders = Array.from(byEmail.values()).map((c) => finalizeCustomer(c));
 
-  const manual = getManualCustomers().map((c) => finalizeCustomer({ ...c, orders: [] }));
+  const manualFinalized = manual.map((c) => finalizeCustomer({ ...c, orders: [] }));
 
   // Evita duplicar um contato manual que já virou cliente de verdade (mesmo e-mail).
   const orderEmails = new Set(fromOrders.map((c) => c.email.toLowerCase()).filter(Boolean));
-  const manualUnique = manual.filter((c) => !c.email || !orderEmails.has(c.email.toLowerCase()));
+  const manualUnique = manualFinalized.filter((c) => !c.email || !orderEmails.has(c.email.toLowerCase()));
 
   return [...fromOrders, ...manualUnique].sort((a, b) => b.totalSpent - a.totalSpent);
 }

@@ -4,9 +4,9 @@ import { renderProductGrid } from '../components/productCard.js';
 import { icon } from '../components/icons.js';
 import { bindGridInteractions } from './pageUtils.js';
 
-export function render() {
+export async function render() {
   const favIds = getFavorites();
-  const favProducts = getCatalogProducts().filter((p) => favIds.includes(p.id));
+  const favProducts = (await getCatalogProducts()).filter((p) => favIds.includes(p.id));
 
   return `
   <div class="page-header">
@@ -34,12 +34,12 @@ export function afterRender() {
   window.addEventListener('favorites:change', rerenderIfOnPage);
 }
 
-function rerenderIfOnPage() {
+async function rerenderIfOnPage() {
   if (location.hash.replace('#', '').split('?')[0] !== '/favoritos') {
     window.removeEventListener('favorites:change', rerenderIfOnPage);
     return;
   }
   const app = document.getElementById('app');
-  app.innerHTML = render();
+  app.innerHTML = await render();
   bindGridInteractions(app);
 }

@@ -22,7 +22,7 @@ const TAG_TITLES = {
   novidades: 'Novidades',
 };
 
-export function render(params, query) {
+export async function render(params, query) {
   state = {
     query: query.busca || '',
     category: query.categoria || '',
@@ -34,7 +34,7 @@ export function render(params, query) {
     sort: query.ordenar || 'relevancia',
   };
 
-  const availableColors = getAvailableColors(getCatalogProducts());
+  const availableColors = getAvailableColors(await getCatalogProducts());
   const title = pageTitle();
 
   return `
@@ -114,8 +114,8 @@ function pageTitle() {
   return 'Todos os Produtos';
 }
 
-function renderGrid() {
-  const list = filterAndSort(getCatalogProducts(), state);
+async function renderGrid() {
+  const list = filterAndSort(await getCatalogProducts(), state);
   const { html, count: total } = renderVariantGrid(list, { colorFilter: state.colors });
   const grid = document.getElementById('catalog-grid');
   const countEl = document.getElementById('result-count');
@@ -142,23 +142,23 @@ function syncUrl() {
   history.replaceState(null, '', `#/produtos${qs ? '?' + qs : ''}`);
 }
 
-export function afterRender() {
+export async function afterRender() {
   document.title = `${pageTitle()} | GRATITUDE TÊXTIL`;
-  renderGrid();
+  await renderGrid();
 
   document.querySelectorAll('[name="f-category"]').forEach((r) => {
-    r.addEventListener('change', (e) => {
+    r.addEventListener('change', async (e) => {
       state.category = e.target.value;
       state.tag = '';
       syncUrl();
-      renderGrid();
+      await renderGrid();
       document.title = `${pageTitle()} | GRATITUDE TÊXTIL`;
       document.querySelector('.page-header h1').textContent = pageTitle();
     });
   });
 
   document.querySelectorAll('[data-size-filter]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const size = btn.getAttribute('data-size-filter');
       if (state.sizes.includes(size)) {
         state.sizes = state.sizes.filter((s) => s !== size);
@@ -167,12 +167,12 @@ export function afterRender() {
       }
       btn.classList.toggle('active');
       syncUrl();
-      renderGrid();
+      await renderGrid();
     });
   });
 
   document.querySelectorAll('[data-color-filter]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const color = btn.getAttribute('data-color-filter');
       if (state.colors.includes(color)) {
         state.colors = state.colors.filter((c) => c !== color);
@@ -181,30 +181,30 @@ export function afterRender() {
       }
       btn.classList.toggle('active');
       syncUrl();
-      renderGrid();
+      await renderGrid();
     });
   });
 
-  document.getElementById('apply-price')?.addEventListener('click', () => {
+  document.getElementById('apply-price')?.addEventListener('click', async () => {
     const min = document.getElementById('price-min').value;
     const max = document.getElementById('price-max').value;
     state.priceMin = min ? Number(min) : null;
     state.priceMax = max ? Number(max) : null;
     syncUrl();
-    renderGrid();
+    await renderGrid();
   });
 
-  document.getElementById('sort-select')?.addEventListener('change', (e) => {
+  document.getElementById('sort-select')?.addEventListener('change', async (e) => {
     state.sort = e.target.value;
     syncUrl();
-    renderGrid();
+    await renderGrid();
   });
 
-  document.getElementById('clear-filters')?.addEventListener('click', () => {
+  document.getElementById('clear-filters')?.addEventListener('click', async () => {
     state = { query: state.query, category: '', tag: '', sizes: [], colors: [], priceMin: null, priceMax: null, sort: 'relevancia' };
     syncUrl();
-    document.getElementById('app').innerHTML = render([], Object.fromEntries(new URLSearchParams(location.hash.split('?')[1] || '')));
-    afterRender();
+    document.getElementById('app').innerHTML = await render([], Object.fromEntries(new URLSearchParams(location.hash.split('?')[1] || '')));
+    await afterRender();
   });
 
   const filtersPanel = document.getElementById('filters-panel');

@@ -1,33 +1,46 @@
 // Camada compartilhada de leitura do catálogo. Loja, PDV e painel
-// administrativo passam a ler os produtos por aqui, em vez de importar
-// `data/products.js` direto - assim, um ajuste de estoque/preço/promoção
-// feito no painel (guardado em localStorage, chave "product_overrides")
-// aparece imediatamente no site e no PDV, sem nunca alterar o arquivo de
-// origem do catálogo real.
+// administrativo passam a ler os produtos por aqui. Os ajustes de
+// estoque/preço/promoção e o desconto geral da loja agora vivem num banco
+// de dados compartilhado (Postgres, via as funções em /api) em vez de
+// localStorage - assim, uma alteração feita no painel por qualquer
+// computador aparece para qualquer visitante, em qualquer aparelho.
+//
+// GET /api/products e GET /api/settings são endpoints públicos (sem PIN),
+// de propósito: qualquer visitante da loja precisa poder ver o
+// estoque/preço atual. Os dados são carregados uma vez e guardados em
+// memória (cache por carregamento de página) para não bater na rede a
+// cada clique de filtro - invalidateCatalogCache() força recarregar depois
+// de uma escrita feita no painel.
 import { products as rawProducts, getImagesForColor } from '../data/products.js';
-import { getItem, setItem } from '../utils/storage.js';
 
-const OVERRIDES_KEY = 'product_overrides';
-const STORE_DISCOUNT_KEY = 'store_discount_percent';
+let _cache = null;
+let _cachePromise = null;
 
-// Desconto padrão aplicado a toda a loja (produtos sem promoção específica
-// definida no painel). Fica ativo por padrão em qualquer navegador - a
-// equipe pode alterar ou desativar (0%) a qualquer momento em
-// Configurações > Promoção da loja.
-const DEFAULT_STORE_DISCOUNT_PERCENT = 27;
-
-function getOverrides() {
-  return getItem(OVERRIDES_KEY, {});
+async function loadState() {
+  if (_cache) return _cache;
+  if (!_cachePromise) {
+    _cachePromise = Promise.all([
+      fetch('/api/products').then((r) => r.json()),
+      fetch('/api/settings').then((r) => r.json()),
+    ])
+      .then(([productsRes, settingsRes]) => {
+        _cache = {
+          overrides: productsRes.overrides || {},
+          discountPercent: Number(settingsRes.discountPercent) || 0,
+        };
+        return _cache;
+      })
+      .catch((err) => {
+        _cachePromise = null;
+        throw err;
+      });
+  }
+  return _cachePromise;
 }
 
-export function getStoreDiscountPercent() {
-  const value = Number(getItem(STORE_DISCOUNT_KEY, DEFAULT_STORE_DISCOUNT_PERCENT));
-  return value > 0 && value < 100 ? value : 0;
-}
-
-export function setStoreDiscountPercent(percent) {
-  const value = Number(percent);
-  setItem(STORE_DISCOUNT_KEY, value > 0 && value < 100 ? value : 0);
+export function invalidateCatalogCache() {
+  _cache = null;
+  _cachePromise = null;
 }
 
 // Arredonda para cima até a casa ",90" mais próxima (nunca abaixo do valor
@@ -41,9 +54,9 @@ function roundUpToNinety(value) {
   return Math.round(candidate * 100) / 100;
 }
 
-// Aplica o estoque/preço salvos no painel por cima do produto real.
+// Aplica o estoque/preço vindos do banco por cima do produto real.
 //
-// Estoque agora é controlado por COR + TAMANHO: o painel guarda ajustes em
+// Estoque é controlado por COR + TAMANHO: o banco guarda ajustes em
 // `stockByColorSize[corSlug][tamanho]`. Quando uma cor ainda não tem ajuste
 // para um tamanho, usamos como ponto de partida o `stockBySize` original do
 // produto (o mesmo valor "cheio" para todas as cores) - é um placeholder,
@@ -61,8 +74,7 @@ function roundUpToNinety(value) {
 //    vitrine - o preço de venda cadastrado (`normalPrice`) É o valor
 //    cobrado e continua exatamente o mesmo; o que aparece é um preço "de"
 //    riscado MAIOR, calculado de forma que aplicar o desconto sobre ele
-//    resulte exatamente no preço de venda real. Ou seja, o desconto geral
-//    nunca reduz o quanto a loja recebe.
+//    resulte exatamente no preço de venda real.
 function applyOverride(p, overrides, storeDiscountPercent) {
   const ov = overrides[p.id] || {};
 
@@ -100,21 +112,20 @@ function applyOverride(p, overrides, storeDiscountPercent) {
   };
 }
 
-export function getCatalogProducts() {
-  const overrides = getOverrides();
-  const storeDiscountPercent = getStoreDiscountPercent();
-  return rawProducts.map((p) => applyOverride(p, overrides, storeDiscountPercent));
+export async function getCatalogProducts() {
+  const { overrides, discountPercent } = await loadState();
+  return rawProducts.map((p) => applyOverride(p, overrides, discountPercent));
 }
 
-export function getCatalogProductBySlug(slug) {
-  const overrides = getOverrides();
-  const storeDiscountPercent = getStoreDiscountPercent();
+export async function getCatalogProductBySlug(slug) {
+  const { overrides, discountPercent } = await loadState();
   const p = rawProducts.find((x) => x.slug === slug || x.id === slug);
-  return p ? applyOverride(p, overrides, storeDiscountPercent) : null;
+  return p ? applyOverride(p, overrides, discountPercent) : null;
 }
 
-export function getCatalogRelated(product, limit = 4) {
-  return getCatalogProducts().filter((p) => p.id !== product.id).slice(0, limit);
+export async function getCatalogRelated(product, limit = 4) {
+  const list = await getCatalogProducts();
+  return list.filter((p) => p.id !== product.id).slice(0, limit);
 }
 
 export { getImagesForColor };

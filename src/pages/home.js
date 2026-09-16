@@ -18,8 +18,8 @@ const CATEGORY_CARDS = [
   { key: 'short', label: 'Shorts', href: '/produtos?categoria=short' },
 ];
 
-export function render() {
-  const featured = getCatalogProducts();
+export async function render() {
+  const featured = await getCatalogProducts();
 
   return `
   <section class="hero">

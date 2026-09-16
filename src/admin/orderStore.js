@@ -1,11 +1,8 @@
-// Camada de dados compartilhada entre as telas do painel (Visão Geral,
-// Pedidos, Clientes, Financeiro) e o PDV. Continua usando localStorage
-// (mesmo mecanismo da loja) - por isso só enxerga pedidos feitos NESTE
-// navegador/computador. Para múltiplos caixas/dispositivos compartilharem
-// os mesmos pedidos, seria necessário um backend real com banco de dados.
-import { getItem, setItem } from '../utils/storage.js';
-
-const ORDER_PREFIX = 'amara:order:';
+// Camada de pedidos do painel/PDV. Antes vivia inteiramente em
+// localStorage (visível só no navegador que criou o pedido); agora lê e
+// grava no banco compartilhado via /api/orders, então qualquer pedido
+// feito pela loja ou pelo PDV, em qualquer aparelho, aparece aqui.
+import { apiGet, apiPost, apiPatch } from './apiClient.js';
 
 // Etapas possíveis do ciclo de vida de um pedido, na ordem em que
 // normalmente acontecem. Usado tanto para os filtros rápidos quanto para
@@ -18,77 +15,49 @@ export const FULFILLMENT_STEPS = [
   { value: 'cancelado', label: 'Cancelado' },
 ];
 
-export function getAllOrders() {
-  const orders = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith(ORDER_PREFIX)) {
-      try {
-        const raw = localStorage.getItem(key);
-        const order = JSON.parse(raw);
-        if (order && order.id) {
-          normalizeOrder(order);
-          orders.push(order);
-        }
-      } catch { /* item corrompido, ignora */ }
-    }
+let _cache = null;
+let _promise = null;
+
+async function loadOrders() {
+  if (_cache) return _cache;
+  if (!_promise) {
+    _promise = apiGet('/orders')
+      .then((data) => { _cache = data.orders; return _cache; })
+      .catch((err) => { _promise = null; throw err; });
   }
-  orders.sort((a, b) => new Date(b.date) - new Date(a.date));
-  return orders;
+  return _promise;
 }
 
-// Pedidos criados antes desta expansão do painel não têm todos os campos
-// novos (fulfillmentStatus, statusHistory, trackingCode) - preenchemos com
-// valores padrão coerentes para não quebrar a interface.
-function normalizeOrder(order) {
-  if (!order.channel) order.channel = 'online';
-  if (!order.fulfillmentStatus) {
-    order.fulfillmentStatus = order.payment?.status === 'pago' ? 'pago' : order.payment?.status === 'cancelado' ? 'cancelado' : 'pendente';
-  }
-  if (!Array.isArray(order.statusHistory) || !order.statusHistory.length) {
-    order.statusHistory = [{ status: order.fulfillmentStatus, date: order.date }];
-  }
-  if (typeof order.trackingCode !== 'string') order.trackingCode = '';
+export function invalidateOrdersCache() {
+  _cache = null;
+  _promise = null;
+}
+
+export async function getAllOrders() {
+  const orders = await loadOrders();
+  return [...orders].sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+// Usado pelo PDV para registrar uma venda de balcão. O endpoint aceita a
+// criação sem exigir o token do painel (o checkout da loja também usa a
+// mesma rota, sem estar autenticado como admin), mas o apiClient sempre
+// envia o token quando ele existir - o que é o caso aqui, já que o PDV só
+// é alcançado depois da tela de PIN.
+export async function saveOrder(order) {
+  const { order: saved } = await apiPost('/orders', order);
+  invalidateOrdersCache();
+  return saved;
+}
+
+export async function updateFulfillmentStatus(id, status) {
+  const { order } = await apiPatch(`/orders/${id}`, { fulfillmentStatus: status });
+  invalidateOrdersCache();
   return order;
 }
 
-export function getOrder(id) {
-  const order = getItem(`order:${id}`, null);
-  return order ? normalizeOrder(order) : null;
-}
-
-export function saveOrder(order) {
-  setItem(`order:${order.id}`, order);
-}
-
-export function updateOrderStatus(id, status) {
-  const order = getOrder(id);
-  if (!order) return null;
-  order.payment = order.payment || {};
-  order.payment.status = status;
-  saveOrder(order);
-  return order;
-}
-
-// Avança/ajusta a etapa de separação-envio do pedido, registrando no
-// histórico para exibir a linha do tempo na tela de detalhes.
-export function updateFulfillmentStatus(id, status) {
-  const order = getOrder(id);
-  if (!order) return null;
-  order.fulfillmentStatus = status;
-  order.statusHistory = order.statusHistory || [];
-  order.statusHistory.push({ status, date: new Date().toISOString() });
-  if (status === 'pago' && order.payment) order.payment.status = 'pago';
-  if (status === 'cancelado' && order.payment) order.payment.status = 'cancelado';
-  saveOrder(order);
-  return order;
-}
-
-export function updateTrackingCode(id, trackingCode) {
-  const order = getOrder(id);
-  if (!order) return null;
-  order.trackingCode = trackingCode;
-  saveOrder(order);
+export async function updateTrackingCode(id, trackingCode) {
+  const { order } = await apiPatch(`/orders/${id}`, { trackingCode });
+  invalidateOrdersCache();
   return order;
 }
 

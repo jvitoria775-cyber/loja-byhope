@@ -19,7 +19,7 @@ let state = { search: '', quickFilter: '', channel: '', page: 1 };
 let allOrders = [];
 
 export async function render() {
-  allOrders = getAllOrders();
+  allOrders = await getAllOrders();
   return `
     <div class="panel">
       <div class="quick-filter-tabs" id="quick-filter-tabs">
@@ -201,18 +201,22 @@ function openOrderModal(id) {
   document.getElementById('modal-close').addEventListener('click', closeModal);
 
   root.querySelectorAll('[data-set-status]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      updateFulfillmentStatus(order.id, btn.getAttribute('data-set-status'));
-      allOrders = getAllOrders();
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await updateFulfillmentStatus(order.id, btn.getAttribute('data-set-status'));
+      allOrders = await getAllOrders();
       renderTable();
       openOrderModal(order.id);
     });
   });
 
-  document.getElementById('save-tracking-btn').addEventListener('click', () => {
+  document.getElementById('save-tracking-btn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
     const val = document.getElementById('tracking-input').value.trim();
-    updateTrackingCode(order.id, val);
-    allOrders = getAllOrders();
+    await updateTrackingCode(order.id, val);
+    allOrders = await getAllOrders();
+    btn.disabled = false;
   });
 
   document.getElementById('export-receipt-btn').addEventListener('click', () => exportReceipt(order));
