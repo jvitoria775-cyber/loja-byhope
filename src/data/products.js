@@ -11,7 +11,7 @@ function pi(category, colorSlug, count = 3) {
 const SIZES_DEFAULT = ['P', 'M', 'G', 'GG'];
 const SIZES_REGATA = ['PP', 'P', 'M', 'G', 'GG'];
 
-function stockAll(sizes, qty = 40) {
+function stockAll(sizes, qty = 999) {
   const out = {};
   sizes.forEach((s) => { out[s] = qty; });
   return out;

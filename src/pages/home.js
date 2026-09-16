@@ -1,4 +1,5 @@
 import { products } from '../data/products.js';
+import { getCatalogProducts } from '../services/catalogService.js';
 import { renderVariantGrid } from '../components/productCard.js';
 import { icon } from '../components/icons.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -18,7 +19,7 @@ const CATEGORY_CARDS = [
 ];
 
 export function render() {
-  const featured = products;
+  const featured = getCatalogProducts();
 
   return `
   <section class="hero">

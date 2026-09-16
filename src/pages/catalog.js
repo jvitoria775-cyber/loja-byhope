@@ -1,4 +1,5 @@
 import { products } from '../data/products.js';
+import { getCatalogProducts } from '../services/catalogService.js';
 import { filterAndSort, getAvailableColors } from '../services/productService.js';
 import { renderVariantGrid } from '../components/productCard.js';
 import { icon } from '../components/icons.js';
@@ -33,7 +34,7 @@ export function render(params, query) {
     sort: query.ordenar || 'relevancia',
   };
 
-  const availableColors = getAvailableColors(products);
+  const availableColors = getAvailableColors(getCatalogProducts());
   const title = pageTitle();
 
   return `
@@ -114,7 +115,7 @@ function pageTitle() {
 }
 
 function renderGrid() {
-  const list = filterAndSort(products, state);
+  const list = filterAndSort(getCatalogProducts(), state);
   const { html, count: total } = renderVariantGrid(list, { colorFilter: state.colors });
   const grid = document.getElementById('catalog-grid');
   const countEl = document.getElementById('result-count');

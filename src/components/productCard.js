@@ -1,4 +1,4 @@
-import { formatBRL } from '../utils/format.js';
+import { formatBRL, calcDiscountPercent } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { isFavorite } from '../context/favoritesStore.js';
 import { icon } from './icons.js';
@@ -23,6 +23,7 @@ export function renderProductCard(p, color, delayIndex = 0) {
           <div class="media-fallback"><span>GT</span></div>
         </div>
       </a>
+      ${p.oldPrice ? `<div class="product-badges"><span class="tag-badge sale">-${calcDiscountPercent(p.price, p.oldPrice)}%</span></div>` : ''}
       <button class="fav-toggle ${fav ? 'active' : ''}" data-fav-btn="${p.id}" aria-pressed="${fav}" aria-label="${fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">
         ${icon('heart')}
       </button>
@@ -37,6 +38,7 @@ export function renderProductCard(p, color, delayIndex = 0) {
       <h3 class="product-name"><a href="#/produto/${p.slug}?cor=${color.slug}">${escapeHtml(p.name)}</a></h3>
       <div class="product-price-row">
         <span class="price-current">${formatBRL(p.price)}</span>
+        ${p.oldPrice ? `<span class="price-old">${formatBRL(p.oldPrice)}</span><span class="price-discount">-${calcDiscountPercent(p.price, p.oldPrice)}%</span>` : ''}
       </div>
       <div class="product-color-name"><span class="color-swatch-mini" style="background:${color.hex}"></span>${escapeHtml(color.name)}</div>
     </div>

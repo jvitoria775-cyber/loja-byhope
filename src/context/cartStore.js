@@ -20,7 +20,8 @@ function findIndex(id, size, color) {
 }
 
 export function addItem(product, size, color, qty = 1) {
-  const stock = product.stockBySize?.[size] ?? 99;
+  const colorSlug = product.colors?.find((c) => c.name === color)?.slug;
+  const stock = product.stockByColorSize?.[colorSlug]?.[size] ?? product.stockBySize?.[size] ?? 99;
   const idx = findIndex(product.id, size, color);
   if (idx >= 0) {
     items[idx].qty = Math.min(items[idx].qty + qty, stock);

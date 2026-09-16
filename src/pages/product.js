@@ -1,5 +1,5 @@
-import { getProductBySlug, getRelated, getImagesForColor } from '../data/products.js';
-import { formatBRL, installmentText } from '../utils/format.js';
+import { getCatalogProductBySlug, getCatalogRelated, getImagesForColor } from '../services/catalogService.js';
+import { formatBRL, installmentText, calcDiscountPercent } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 import { isFavorite, toggleFavorite } from '../context/favoritesStore.js';
@@ -13,13 +13,14 @@ import { bindGridInteractions } from './pageUtils.js';
 
 let current = null;
 let selectedColor = null;
+let selectedColorSlug = null;
 let selectedSize = null;
 let qty = 1;
 let currentImages = [];
 
 export function render(params, query = {}) {
   const slug = params[0];
-  const product = getProductBySlug(slug);
+  const product = getCatalogProductBySlug(slug);
   current = product;
 
   if (!product) {
@@ -36,11 +37,12 @@ export function render(params, query = {}) {
   const initialColor = requestedColor || product.colors[0];
 
   selectedColor = initialColor?.name || null;
+  selectedColorSlug = initialColor?.slug || null;
   selectedSize = null;
   qty = 1;
   currentImages = getImagesForColor(product, initialColor.slug);
 
-  const related = getRelated(product);
+  const related = getCatalogRelated(product);
 
   return `
   <div class="product-detail">
@@ -67,6 +69,7 @@ export function render(params, query = {}) {
 
           <div class="pd-price-block">
             <span class="pd-price-current">${formatBRL(product.price)}</span>
+            ${product.oldPrice ? `<span class="pd-price-old">${formatBRL(product.oldPrice)}</span> <span class="tag-badge sale">-${calcDiscountPercent(product.price, product.oldPrice)}%</span>` : ''}
             <div class="pd-installments">${installmentText(product.price, 3)}</div>
           </div>
 
@@ -89,10 +92,7 @@ export function render(params, query = {}) {
               <button type="button" id="open-size-guide">Guia de tamanhos</button>
             </div>
             <div class="size-select-row" id="size-select-row">
-              ${product.sizes.map((s) => {
-                const stock = product.stockBySize[s];
-                return `<button type="button" class="size-select" data-size="${s}" ${stock <= 0 ? 'disabled title="Indisponível"' : ''}>${s}</button>`;
-              }).join('')}
+              ${renderSizeButtons(product, initialColor.slug)}
             </div>
             <p class="form-hint" id="size-hint"></p>
           </div>
@@ -151,6 +151,26 @@ export function render(params, query = {}) {
   </div>`;
 }
 
+function renderSizeButtons(product, colorSlug) {
+  const stockForColor = product.stockByColorSize?.[colorSlug] || {};
+  return product.sizes.map((s) => {
+    const stock = stockForColor[s] ?? 0;
+    return `<button type="button" class="size-select" data-size="${s}" ${stock <= 0 ? 'disabled title="Indisponível nesta cor"' : ''}>${s}</button>`;
+  }).join('');
+}
+
+function bindSizeEvents() {
+  document.querySelectorAll('.size-select').forEach((btn) => {
+    if (btn.disabled) return;
+    btn.addEventListener('click', () => {
+      selectedSize = btn.getAttribute('data-size');
+      document.querySelectorAll('.size-select').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('size-hint').textContent = '';
+    });
+  });
+}
+
 function renderThumbs(images) {
   return images.map((img, i) => `
     <button class="gallery-thumb ${i === 0 ? 'active' : ''}" data-thumb="${i}" aria-label="Ver imagem ${i + 1}">
@@ -172,6 +192,7 @@ export function afterRender() {
     btn.addEventListener('click', () => {
       selectedColor = btn.getAttribute('data-color');
       const colorSlug = btn.getAttribute('data-color-slug');
+      selectedColorSlug = colorSlug;
       document.querySelectorAll('[data-color]').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('selected-color-label').textContent = selectedColor;
@@ -181,18 +202,19 @@ export function afterRender() {
       document.getElementById('gallery-main-img').alt = currentImages[0].alt;
       document.getElementById('gallery-thumbs').innerHTML = renderThumbs(currentImages);
       bindThumbEvents();
+
+      // Cada cor tem seu próprio estoque por tamanho - ao trocar de cor,
+      // atualiza quais tamanhos estão disponíveis e limpa a seleção atual.
+      selectedSize = null;
+      qty = 1;
+      document.getElementById('qty-value').textContent = '1';
+      document.getElementById('size-select-row').innerHTML = renderSizeButtons(product, colorSlug);
+      document.getElementById('size-hint').textContent = '';
+      bindSizeEvents();
     });
   });
 
-  document.querySelectorAll('.size-select').forEach((btn) => {
-    if (btn.disabled) return;
-    btn.addEventListener('click', () => {
-      selectedSize = btn.getAttribute('data-size');
-      document.querySelectorAll('.size-select').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('size-hint').textContent = '';
-    });
-  });
+  bindSizeEvents();
 
   document.getElementById('open-size-guide')?.addEventListener('click', () => openSizeGuide(product));
 
@@ -202,7 +224,7 @@ export function afterRender() {
     qtyValue.textContent = String(qty);
   });
   document.getElementById('qty-plus')?.addEventListener('click', () => {
-    const maxStock = selectedSize ? product.stockBySize[selectedSize] : 99;
+    const maxStock = selectedSize ? product.stockByColorSize?.[selectedColorSlug]?.[selectedSize] : 99;
     qty = Math.min(maxStock || 99, qty + 1);
     qtyValue.textContent = String(qty);
   });

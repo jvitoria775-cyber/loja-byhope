@@ -2,15 +2,26 @@
 // verdade (é só JavaScript no navegador, sem servidor validando nada) - serve
 // apenas como uma trava básica para não deixar o painel visível para
 // qualquer pessoa que abra a URL por engano em um computador da loja.
-const PIN = '2026';
+import { getItem, setItem } from '../utils/storage.js';
+
+const DEFAULT_PIN = '2026';
+const PIN_KEY = 'admin_pin';
 const SESSION_KEY = 'amara_admin_session';
+
+export function getPin() {
+  return getItem(PIN_KEY, DEFAULT_PIN);
+}
+
+export function setPin(newPin) {
+  setItem(PIN_KEY, newPin);
+}
 
 export function isUnlocked() {
   return sessionStorage.getItem(SESSION_KEY) === 'ok';
 }
 
 export function tryUnlock(pin) {
-  if (pin === PIN) {
+  if (pin === getPin()) {
     sessionStorage.setItem(SESSION_KEY, 'ok');
     return true;
   }

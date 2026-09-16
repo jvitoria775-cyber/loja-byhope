@@ -1,4 +1,4 @@
-import { products } from '../data/products.js';
+import { getCatalogProducts } from '../services/catalogService.js';
 import { getFavorites } from '../context/favoritesStore.js';
 import { renderProductGrid } from '../components/productCard.js';
 import { icon } from '../components/icons.js';
@@ -6,7 +6,7 @@ import { bindGridInteractions } from './pageUtils.js';
 
 export function render() {
   const favIds = getFavorites();
-  const favProducts = products.filter((p) => favIds.includes(p.id));
+  const favProducts = getCatalogProducts().filter((p) => favIds.includes(p.id));
 
   return `
   <div class="page-header">

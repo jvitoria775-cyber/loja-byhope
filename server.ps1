@@ -115,16 +115,32 @@ function Start-AmaraServer {
   $listener = $null
   $port = $StartPort
   $maxAttempts = 15
+  $listeningOnLan = $false
 
   for ($i = 0; $i -lt $maxAttempts; $i++) {
+    # Tenta primeiro escutar em todas as interfaces (acesso pela rede local,
+    # util para abrir o PDV em um tablet/celular no Wi-Fi da loja). Isso
+    # exige permissao de administrador (ou uma reserva de URL via netsh) -
+    # se falhar por permissao, cai automaticamente para localhost, que
+    # sempre funciona sem privilegios especiais.
     try {
       $candidate = New-Object System.Net.HttpListener
       $candidate.Prefixes.Add("http://+:$port/")
       $candidate.Start()
       $listener = $candidate
+      $listeningOnLan = $true
       break
     } catch {
-      $port++
+      try {
+        $fallback = New-Object System.Net.HttpListener
+        $fallback.Prefixes.Add("http://localhost:$port/")
+        $fallback.Start()
+        $listener = $fallback
+        $listeningOnLan = $false
+        break
+      } catch {
+        $port++
+      }
     }
   }
 
@@ -133,14 +149,21 @@ function Start-AmaraServer {
     return
   }
 
-  $lanIp = (Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp,Manual -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notlike "169.254.*" } | Select-Object -First 1 -ExpandProperty IPAddress)
-
   Write-Host "=================================================="
   Write-Host " GRATITUDE TEXTIL - site rodando em:"
   Write-Host " http://localhost:$port/" -ForegroundColor Green
-  if ($lanIp) {
-    Write-Host " http://$($lanIp):$port/ (na rede local)" -ForegroundColor Green
+
+  if ($listeningOnLan) {
+    $lanIp = (Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin Dhcp,Manual -ErrorAction SilentlyContinue |
+      Where-Object { $_.IPAddress -notlike "169.254.*" } | Select-Object -First 1 -ExpandProperty IPAddress)
+    if ($lanIp) {
+      Write-Host " http://$($lanIp):$port/ (na rede local - tablet/celular no mesmo Wi-Fi)" -ForegroundColor Green
+    }
+  } else {
+    Write-Host " (rodando apenas em localhost - sem permissao para acesso pela rede local)" -ForegroundColor Yellow
+    Write-Host " Para liberar acesso de outros aparelhos na rede, rode este PowerShell" -ForegroundColor DarkYellow
+    Write-Host " como Administrador, ou execute uma vez:" -ForegroundColor DarkYellow
+    Write-Host "   netsh http add urlacl url=http://+:$port/ user=Todos" -ForegroundColor DarkYellow
   }
   Write-Host "=================================================="
   Write-Host " Pressione CTRL+C para encerrar o servidor."

@@ -1,5 +1,5 @@
 import { isUnlocked, renderGate, lock } from './adminAuth.js';
-import { products } from '../data/products.js';
+import { getCatalogProducts } from '../services/catalogService.js';
 import { saveOrder, generatePdvOrderId } from './orderStore.js';
 import { createInfinitePayLink } from '../services/paymentService.js';
 import { formatBRL } from '../utils/format.js';
@@ -8,7 +8,7 @@ import { icon } from '../components/icons.js';
 
 const CATEGORIES = [
   { key: '', label: 'Todas' },
-  ...Array.from(products.reduce((m, p) => m.set(p.category, p.categoryLabel), new Map()), ([value, label]) => ({ key: value, label })),
+  ...Array.from(getCatalogProducts().reduce((m, p) => m.set(p.category, p.categoryLabel), new Map()), ([value, label]) => ({ key: value, label })),
 ];
 
 let cart = []; // { productId, colorSlug, colorName, size, qty, price, name, image }
@@ -84,7 +84,7 @@ function render() {
 
 function renderProductGrid() {
   const grid = document.getElementById('pdv-product-grid');
-  const list = products.filter((p) => {
+  const list = getCatalogProducts().filter((p) => {
     if (activeCategory && p.category !== activeCategory) return false;
     if (searchTerm && !p.name.toLowerCase().includes(searchTerm)) return false;
     return true;
@@ -100,7 +100,7 @@ function renderProductGrid() {
       <div class="media"><img src="${p.images[0].src}" alt="${escapeHtml(p.name)}" loading="lazy" onerror="this.style.opacity=0"></div>
       <div class="info">
         <strong>${escapeHtml(p.name)}</strong>
-        <span>${formatBRL(p.price)} · ${p.colors.length} cor(es)</span>
+        <span>${formatBRL(p.price)}${p.oldPrice ? ` <s style="color:var(--color-text-faint);">${formatBRL(p.oldPrice)}</s>` : ''} · ${p.colors.length} cor(es)</span>
       </div>
     </div>`).join('');
 
@@ -110,7 +110,7 @@ function renderProductGrid() {
 }
 
 function openVariantModal(productId) {
-  const product = products.find((p) => p.id === productId);
+  const product = getCatalogProducts().find((p) => p.id === productId);
   if (!product) return;
 
   let selectedColor = product.colors[0];
@@ -129,7 +129,7 @@ function openVariantModal(productId) {
             <img src="${images[0]}" alt="${escapeHtml(product.name)}" style="width:100px;height:124px;object-fit:cover;border-radius:8px;" onerror="this.style.visibility='hidden'">
             <div>
               <h2 style="font-size:17px;">${escapeHtml(product.name)}</h2>
-              <p style="color:var(--color-text-soft);font-size:13px;margin-top:4px;">${formatBRL(product.price)}</p>
+              <p style="color:var(--color-text-soft);font-size:13px;margin-top:4px;">${formatBRL(product.price)}${product.oldPrice ? ` <s style="color:var(--color-text-faint);">${formatBRL(product.oldPrice)}</s>` : ''}</p>
             </div>
           </div>
 
@@ -145,7 +145,7 @@ function openVariantModal(productId) {
             <strong style="font-size:12.5px;">Tamanho</strong>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
               ${product.sizes.map((s) => {
-                const stock = product.stockBySize[s];
+                const stock = product.stockByColorSize?.[selectedColor.slug]?.[s] ?? 0;
                 const active = selectedSize === s;
                 return `<button type="button" data-size="${s}" ${stock <= 0 ? 'disabled' : ''} style="min-width:44px;padding:8px 6px;border-radius:6px;border:1px solid ${active ? 'var(--color-primary)' : 'var(--color-border)'};background:${active ? 'var(--color-primary)' : '#fff'};color:${active ? '#fff' : 'var(--color-text)'};opacity:${stock <= 0 ? 0.4 : 1};">${s}</button>`;
               }).join('')}

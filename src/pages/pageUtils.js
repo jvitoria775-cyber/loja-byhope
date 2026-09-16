@@ -1,4 +1,4 @@
-import { products } from '../data/products.js';
+import { getCatalogProducts } from '../services/catalogService.js';
 import { toggleFavorite } from '../context/favoritesStore.js';
 import { addItem } from '../context/cartStore.js';
 import { showToast } from '../components/toast.js';
@@ -23,14 +23,15 @@ export function bindGridInteractions(container) {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const id = btn.getAttribute('data-quick-add');
-      const product = products.find((p) => p.id === id);
+      const product = getCatalogProducts().find((p) => p.id === id);
       if (!product) return;
 
       const colorSlug = btn.getAttribute('data-quick-add-color');
       const colorObj = product.colors.find((c) => c.slug === colorSlug) || product.colors[0];
       const color = colorObj.name;
 
-      const size = product.sizes.find((s) => product.stockBySize[s] > 0);
+      const stockForColor = product.stockByColorSize?.[colorObj.slug] || {};
+      const size = product.sizes.find((s) => stockForColor[s] > 0);
       if (!size) {
         showToast('Produto sem estoque disponível no momento.', 'error');
         return;
