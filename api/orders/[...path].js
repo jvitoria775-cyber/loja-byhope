@@ -1,63 +1,16 @@
 import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
 import { requireAuth } from '../_auth.js';
 
-// Rota "catch-all" cobrindo /api/orders, /api/orders/:id e
-// /api/orders/:id/confirm-payment num único arquivo - o plano gratuito da
-// Vercel permite no máximo 12 Serverless Functions por deploy, então
-// agrupamos rotas relacionadas em vez de um arquivo por endpoint.
+// Cobre /api/orders/:id e /api/orders/:id/confirm-payment (a rota base
+// /api/orders vive em orders/index.js - o catch-all aqui só recebe
+// caminhos com 1+ segmentos).
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
   const segments = [].concat(req.query.path || []);
 
-  if (segments.length === 0) return handleCollection(req, res);
   if (segments.length === 1) return handleSingle(req, res, segments[0]);
   if (segments.length === 2 && segments[1] === 'confirm-payment') return handleConfirmPayment(req, res, segments[0]);
   return sendJson(res, 404, { error: 'Rota não encontrada.' });
-}
-
-// GET: lista todos os pedidos (protegido - só o painel administrativo).
-// POST: cria um novo pedido (público - usado pelo checkout da loja e pelo
-// PDV; qualquer cliente precisa poder registrar o próprio pedido).
-async function handleCollection(req, res) {
-  if (req.method === 'GET') {
-    if (!requireAuth(req, res)) return;
-    const { rows } = await sql`SELECT data FROM orders ORDER BY created_at DESC`;
-    return sendJson(res, 200, { orders: rows.map((r) => r.data) });
-  }
-
-  if (req.method === 'POST') {
-    const order = readJsonBody(req);
-    if (!order.id || !Array.isArray(order.items) || !order.items.length) {
-      return sendJson(res, 400, { error: 'Pedido inválido.' });
-    }
-    if (!order.statusHistory || !order.statusHistory.length) {
-      order.fulfillmentStatus = order.fulfillmentStatus
-        || (order.payment?.status === 'pago' ? 'pago' : order.payment?.status === 'cancelado' ? 'cancelado' : 'pendente');
-      order.statusHistory = [{ status: order.fulfillmentStatus, date: order.date || new Date().toISOString() }];
-    }
-    if (typeof order.trackingCode !== 'string') order.trackingCode = '';
-
-    await sql`
-      INSERT INTO orders (id, data, channel, status, fulfillment_status, customer_email, is_demo)
-      VALUES (
-        ${order.id},
-        ${JSON.stringify(order)}::jsonb,
-        ${order.channel || 'online'},
-        ${order.payment?.status || 'pendente'},
-        ${order.fulfillmentStatus || 'pendente'},
-        ${(order.customer?.email || '').toLowerCase()},
-        ${!!order.demo}
-      )
-      ON CONFLICT (id) DO UPDATE SET
-        data = EXCLUDED.data,
-        status = EXCLUDED.status,
-        fulfillment_status = EXCLUDED.fulfillment_status,
-        updated_at = now()
-    `;
-    return sendJson(res, 201, { ok: true, order });
-  }
-
-  return sendJson(res, 405, { error: 'Método não permitido.' });
 }
 
 // GET: busca um pedido específico (público - usado pela página de
