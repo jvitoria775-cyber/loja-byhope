@@ -1,4 +1,4 @@
-import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
+import { sql, handlePreflight, readJsonBody, sendJson, getPathSegments } from '../_db.js';
 import { requireAuth } from '../_auth.js';
 import { catalogMeta } from '../_catalogMeta.js';
 
@@ -7,7 +7,7 @@ import { catalogMeta } from '../_catalogMeta.js';
 // products/index.js - o catch-all aqui só recebe caminhos com 1+ segmentos).
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
-  const segments = [].concat(req.query.path || []);
+  const segments = getPathSegments(req, 'products');
 
   if (segments.length === 1 && segments[0] === 'bulk-stock') return handleBulkStock(req, res);
   if (segments.length === 1) return handleSingle(req, res, segments[0]);

@@ -1,4 +1,4 @@
-import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
+import { sql, handlePreflight, readJsonBody, sendJson, getPathSegments } from '../_db.js';
 import { requireAuth } from '../_auth.js';
 
 // Cobre /api/orders/:id e /api/orders/:id/confirm-payment (a rota base
@@ -6,7 +6,7 @@ import { requireAuth } from '../_auth.js';
 // caminhos com 1+ segmentos).
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
-  const segments = [].concat(req.query.path || []);
+  const segments = getPathSegments(req, 'orders');
 
   if (segments.length === 1) return handleSingle(req, res, segments[0]);
   if (segments.length === 2 && segments[1] === 'confirm-payment') return handleConfirmPayment(req, res, segments[0]);

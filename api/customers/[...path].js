@@ -1,4 +1,4 @@
-import { sql, handlePreflight, sendJson } from '../_db.js';
+import { sql, handlePreflight, sendJson, getPathSegments } from '../_db.js';
 import { requireAuth } from '../_auth.js';
 
 // Cobre /api/customers/:id (a rota base /api/customers vive em
@@ -7,7 +7,7 @@ import { requireAuth } from '../_auth.js';
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
   if (!requireAuth(req, res)) return;
-  const segments = [].concat(req.query.path || []);
+  const segments = getPathSegments(req, 'customers');
 
   if (segments.length === 1) {
     if (req.method === 'DELETE') {
