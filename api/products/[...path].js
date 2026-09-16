@@ -1,6 +1,6 @@
 import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
 import { requireAuth } from '../_auth.js';
-import { products as realProducts } from '../../src/data/products.js';
+import { catalogMeta } from '../_catalogMeta.js';
 
 // Cobre /api/products/:id, /api/products/:id/hide e
 // /api/products/bulk-stock (a rota base /api/products vive em
@@ -97,13 +97,13 @@ async function handleBulkStock(req, res) {
   const { rows: overrideRows } = await sql`SELECT product_id, data FROM product_overrides`;
   const overridesById = new Map(overrideRows.map((r) => [r.product_id, r.data]));
 
-  for (const p of realProducts) {
+  for (const p of catalogMeta) {
     const current = overridesById.get(p.id) || {};
     const stockByColorSize = { ...(current.stockByColorSize || {}) };
-    p.colors.forEach((c) => {
-      const bySize = { ...(stockByColorSize[c.slug] || {}) };
+    p.colors.forEach((colorSlug) => {
+      const bySize = { ...(stockByColorSize[colorSlug] || {}) };
       p.sizes.forEach((s) => { bySize[s] = value; });
-      stockByColorSize[c.slug] = bySize;
+      stockByColorSize[colorSlug] = bySize;
     });
     const next = { ...current, stockByColorSize };
     await sql`
