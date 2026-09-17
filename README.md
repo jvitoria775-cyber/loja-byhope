@@ -1,5 +1,7 @@
 # Gratitude Têxtil — Site Oficial
 
+**Site publicado:** https://loja-byhope.vercel.app
+
 Site institucional e catálogo da **Gratitude Têxtil**, confecção de peças básicas em atacado (camisetas, baby look, cropped, regata, moletom canguru e shorts). Todo o conteúdo — logo, produtos, fotos, descrições e preços — é real, baseado nos materiais oficiais fornecidos pela empresa.
 
 ## Tecnologias utilizadas
