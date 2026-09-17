@@ -183,7 +183,7 @@ export async function purchaseLabel({ order, from, packageDims, totalWeightKg })
       name: from.name || 'Loja',
       phone: onlyDigits(from.phone),
       email: from.email || undefined,
-      document: onlyDigits(from.cnpj) || undefined,
+      company_document: onlyDigits(from.cnpj) || undefined,
       address: from.street,
       number: from.number,
       district: from.district,
