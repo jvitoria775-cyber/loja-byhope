@@ -1,13 +1,14 @@
 import { sql, handlePreflight, readJsonBody, sendJson, getIdFromUrl } from '../_db.js';
 import { requireAuth } from '../_auth.js';
-import { purchaseLabel, computeTotalWeightKg, DEFAULT_PACKAGE_DIMS } from '../_melhorEnvio.js';
+import { maybeAutoPurchaseLabel, manualPurchaseLabel } from '../_melhorEnvio.js';
 
 // GET: busca um pedido específico (público - usado pela página de
 // confirmação após o pagamento, o próprio cliente lendo o pedido dele).
 // PATCH com { action: "confirm-payment" } no corpo: marca como pago com os
-// dados que a InfinitePay devolve no redirecionamento (público de
-// propósito - o cliente confirmando o próprio pagamento, sem estar logado
-// como admin; só mexe nos campos de pagamento).
+// dados que o gateway devolve no redirecionamento (público de propósito -
+// o cliente confirmando o próprio pagamento, sem estar logado como admin;
+// só mexe nos campos de pagamento). É um reforço - a confirmação de
+// verdade agora vem do webhook em api/payment.js.
 // PATCH sem essa ação: atualiza status de separação/envio e código de
 // rastreio (protegido - só o painel administrativo).
 // DELETE: remove o pedido definitivamente (protegido - usado quando o
@@ -108,42 +109,6 @@ async function handleConfirmPayment(res, id, body) {
   return sendJson(res, 200, { order });
 }
 
-// Compra e gera a etiqueta automaticamente assim que um pedido de entrega
-// (não retirada) é marcado como pago - dispara tanto quando o próprio
-// cliente confirma o pagamento (InfinitePay) quanto quando o painel marca
-// manualmente. Nunca lança erro pra fora: se falhar (saldo insuficiente,
-// CEP inválido etc.), só marca a etiqueta como "falhou" no pedido, sem
-// impedir a confirmação do pagamento em si - o lojista tenta de novo
-// manualmente depois (botão "Gerar etiqueta" no painel).
-async function maybeAutoPurchaseLabel(order) {
-  if (!order.shipping || order.shipping.type === 'retirada') return;
-  if (order.shipping.melhorEnvio) return;
-  if (!order.shipping.serviceId) return;
-
-  try {
-    const result = await runPurchaseLabel(order);
-    order.shipping.melhorEnvio = { ...result, status: 'gerada' };
-  } catch (err) {
-    order.shipping.melhorEnvio = { status: 'falhou', error: err.message };
-  }
-}
-
-async function runPurchaseLabel(order) {
-  const { rows } = await sql`SELECT key, value FROM settings WHERE key IN ('store_info', 'shipping_config')`;
-  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-  const storeInfo = map.store_info;
-  const shippingConfig = map.shipping_config || {};
-  if (!storeInfo?.cep) throw new Error('CEP de origem da loja não configurado (Configurações > Dados da loja).');
-
-  const totalWeightKg = computeTotalWeightKg(order.items, shippingConfig.categoryWeights);
-  const packageDims = {
-    width: shippingConfig.packageWidthCm || DEFAULT_PACKAGE_DIMS.width,
-    height: shippingConfig.packageHeightCm || DEFAULT_PACKAGE_DIMS.height,
-    length: shippingConfig.packageLengthCm || DEFAULT_PACKAGE_DIMS.length,
-  };
-  return purchaseLabel({ order, from: storeInfo, packageDims, totalWeightKg });
-}
-
 // PATCH { action: 'purchase-label' } - tentativa manual pelo painel
 // (cobre falha anterior ou pedido antigo). Protegida por PIN.
 async function handlePurchaseLabelRequest(res, id) {
@@ -159,7 +124,7 @@ async function handlePurchaseLabelRequest(res, id) {
   }
 
   try {
-    const result = await runPurchaseLabel(order);
+    const result = await manualPurchaseLabel(order);
     order.shipping.melhorEnvio = { ...result, status: 'gerada' };
   } catch (err) {
     order.shipping.melhorEnvio = { status: 'falhou', error: err.message };

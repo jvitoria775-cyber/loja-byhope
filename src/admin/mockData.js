@@ -91,7 +91,7 @@ function buildOrder(dayOffset, channel) {
       complement: '', neighborhood: 'Centro', city: loc.city, state: loc.state,
     },
     shipping: channel === 'pdv' ? { type: 'retirada', label: 'Venda no balcão', price: 0, days: 0 } : { type: 'economico', label: 'Frete Econômico', price: shippingPrice, days: randInt(3, 12) },
-    payment: { method: channel === 'pdv' ? pick(['dinheiro', 'cartao', 'infinitepay']) : 'infinitepay', status },
+    payment: { method: channel === 'pdv' ? pick(['dinheiro', 'cartao', 'pagarme']) : 'pagarme', status },
     fulfillmentStatus: fulfillment,
     statusHistory: [{ status: fulfillment, date }],
     trackingCode: fulfillment === 'enviado' ? `BR${randInt(100000000, 999999999)}BR` : '',

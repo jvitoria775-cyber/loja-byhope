@@ -63,3 +63,8 @@ export async function getMelhorEnvioStatus() {
   const { melhorEnvio } = await load();
   return melhorEnvio || { connected: false };
 }
+
+export async function getPagarmeStatus() {
+  const { pagarme } = await load();
+  return pagarme || { connected: false };
+}

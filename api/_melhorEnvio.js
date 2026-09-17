@@ -242,3 +242,48 @@ export async function purchaseLabel({ order, from, packageDims, totalWeightKg })
     labelUrl: printData.url,
   };
 }
+
+async function runPurchaseLabel(order) {
+  const { rows } = await sql`SELECT key, value FROM settings WHERE key IN ('store_info', 'shipping_config')`;
+  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const storeInfo = map.store_info;
+  const shippingConfig = map.shipping_config || {};
+  if (!storeInfo?.cep) throw new Error('CEP de origem da loja não configurado (Configurações > Dados da loja).');
+
+  const totalWeightKg = computeTotalWeightKg(order.items, shippingConfig.categoryWeights);
+  const packageDims = {
+    width: shippingConfig.packageWidthCm || DEFAULT_PACKAGE_DIMS.width,
+    height: shippingConfig.packageHeightCm || DEFAULT_PACKAGE_DIMS.height,
+    length: shippingConfig.packageLengthCm || DEFAULT_PACKAGE_DIMS.length,
+  };
+  return purchaseLabel({ order, from: storeInfo, packageDims, totalWeightKg });
+}
+
+// Compra e gera a etiqueta automaticamente assim que um pedido de entrega
+// (não retirada) é marcado como pago - dispara tanto na confirmação de
+// pagamento (webhook da Pagar.me ou redirecionamento) quanto quando o
+// painel marca manualmente. Fica aqui (não em api/orders/[id].js) porque
+// tanto api/orders/[id].js quanto api/payment.js (webhook) precisam dela,
+// e dois arquivos de rota nunca importam um do outro - só de um helper
+// `_` compartilhado. Nunca lança erro pra fora: se falhar (saldo
+// insuficiente, CEP inválido etc.), só marca a etiqueta como "falhou" no
+// pedido, sem impedir a confirmação do pagamento em si.
+export async function maybeAutoPurchaseLabel(order) {
+  if (!order.shipping || order.shipping.type === 'retirada') return;
+  if (order.shipping.melhorEnvio) return;
+  if (!order.shipping.serviceId) return;
+
+  try {
+    const result = await runPurchaseLabel(order);
+    order.shipping.melhorEnvio = { ...result, status: 'gerada' };
+  } catch (err) {
+    order.shipping.melhorEnvio = { status: 'falhou', error: err.message };
+  }
+}
+
+// Tentativa manual (botão no painel) - sempre tenta de novo, mesmo se já
+// tiver um resultado anterior (diferente de maybeAutoPurchaseLabel, que só
+// tenta uma vez sozinha).
+export async function manualPurchaseLabel(order) {
+  return runPurchaseLabel(order);
+}

@@ -3,12 +3,13 @@ import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 
 const PAYMENT_LABELS = {
-  infinitepay: 'InfinitePay',
-  credit_card: 'Cartão de Crédito (InfinitePay)',
-  pix: 'Pix (InfinitePay)',
+  pagarme: 'Pagar.me',
+  credit_card: 'Cartão de Crédito',
+  pix: 'Pix',
 };
 
 let currentOrder = null;
+let pollTimer = null;
 
 export async function render(params, query = {}) {
   const id = params[0];
@@ -29,10 +30,10 @@ export async function render(params, query = {}) {
     </div>`;
   }
 
-  // A InfinitePay retorna alguns parametros na URL apos o pagamento
-  // (transaction_nsu, capture_method, receipt_url, slug). Eles podem vir
-  // como query string normal OU anexados dentro do proprio hash da rota -
-  // por isso verificamos as duas origens antes de exibir/gravar a confirmacao.
+  // Alguns gateways devolvem parâmetros na URL depois do redirecionamento
+  // de pagamento. A confirmação de verdade agora vem do webhook (servidor
+  // a servidor, mais confiável), mas mantemos essa checagem como reforço
+  // caso a Pagar.me também mande algo no redirecionamento.
   const searchParams = new URLSearchParams(location.search);
   const captureMethod = query.capture_method || searchParams.get('capture_method');
   const transactionNsu = query.transaction_nsu || searchParams.get('transaction_nsu');
@@ -50,15 +51,31 @@ export async function render(params, query = {}) {
     } catch { /* mantém os dados já carregados se a confirmação falhar */ }
   }
 
+  return renderOrderHtml(order);
+}
+
+function renderOrderHtml(order) {
   const eta = order.shipping?.days ? `${order.shipping.days} dias úteis` : 'a confirmar';
   const paymentLabel = PAYMENT_LABELS[order.payment.method] || order.payment.method;
   const isPaid = order.payment.status === 'pago';
+  const awaitingPix = !isPaid && order.payment.pixQrCode;
 
   return `
   <div class="success-page">
-    <div class="success-icon">${icon('check')}</div>
-    <h1>Pedido realizado com sucesso!</h1>
-    <p class="section-sub" style="margin:10px auto 0;">Obrigado por comprar na GRATITUDE TÊXTIL. Enviamos os detalhes para ${escapeHtml(order.customer.email)}.</p>
+    ${awaitingPix ? `
+      <div class="pix-wait-block" id="pix-wait-block">
+        <h1 style="margin-bottom:6px;">Falta só o pagamento!</h1>
+        <p class="section-sub" style="margin:0 auto 20px;">Escaneie o QR code ou use o Pix Copia e Cola. A confirmação é automática — essa página atualiza sozinha assim que o pagamento cair.</p>
+        ${order.payment.pixQrCodeUrl ? `<img src="${escapeHtml(order.payment.pixQrCodeUrl)}" alt="QR code Pix" style="width:220px;height:220px;margin:0 auto 18px;display:block;border:1px solid var(--color-border-soft);border-radius:var(--radius-md);">` : ''}
+        <div class="pix-copy-row">
+          <input type="text" id="pix-copy-input" readonly value="${escapeHtml(order.payment.pixQrCode || '')}">
+          <button type="button" class="btn btn-primary" id="pix-copy-btn">Copiar código</button>
+        </div>
+        <p class="form-hint" style="margin-top:14px;">Aguardando pagamento — não feche esta página.</p>
+      </div>` : `
+      <div class="success-icon">${icon('check')}</div>
+      <h1>Pedido realizado com sucesso!</h1>
+      <p class="section-sub" style="margin:10px auto 0;">Obrigado por comprar na GRATITUDE TÊXTIL. Enviamos os detalhes para ${escapeHtml(order.customer.email)}.</p>`}
 
     <div class="order-card">
       <div class="order-card-row"><span>Número do pedido</span><strong>#${order.id}</strong></div>
@@ -81,4 +98,40 @@ export async function render(params, query = {}) {
 
 export function afterRender() {
   document.title = 'Pedido confirmado | GRATITUDE TÊXTIL';
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+
+  document.getElementById('pix-copy-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('pix-copy-input');
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch {
+      input.select();
+      document.execCommand('copy');
+    }
+  });
+
+  if (!currentOrder || currentOrder.payment.status === 'pago' || !currentOrder.payment.pixQrCode) return;
+
+  const orderId = currentOrder.id;
+  pollTimer = setInterval(async () => {
+    // Se a página não é mais esta (usuário navegou pra outro lugar),
+    // para de checar - não tem mais nada pra atualizar aqui.
+    if (!document.getElementById('pix-wait-block')) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      return;
+    }
+    try {
+      const res = await fetch(`/api/orders/${orderId}`);
+      if (!res.ok) return;
+      const { order } = await res.json();
+      if (order.payment.status === 'pago') {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        currentOrder = order;
+        document.getElementById('app').innerHTML = renderOrderHtml(order);
+        afterRender();
+      }
+    } catch { /* tenta de novo na próxima vez */ }
+  }, 5000);
 }

@@ -1,7 +1,7 @@
 import { getItems, getSubtotal, getCoupon, clearCart } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
 import { calculateShipping, isValidCep } from '../services/shippingService.js';
-import { createInfinitePayLink } from '../services/paymentService.js';
+import { createCheckoutLink, createPixCharge } from '../services/paymentService.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
@@ -9,6 +9,7 @@ import { showToast } from '../components/toast.js';
 import { getCurrentUser, getToken } from '../context/authStore.js';
 import { setItem, getItem } from '../utils/storage.js';
 import { isValidCpf, isValidCnpj, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
+import { navigate } from '../router.js';
 
 let shippingOptions = [];
 let selectedShipping = getItem('shippingChoice', null);
@@ -85,8 +86,13 @@ export function render() {
             <div class="infinitepay-note">
               <div class="infinitepay-note-icon">${icon('shield')}</div>
               <div>
-                <strong>Pagamento seguro via InfinitePay</strong>
-                <p>Ao confirmar, você será direcionado para a página segura da InfinitePay para escolher entre <strong>Pix</strong> ou <strong>Cartão de crédito (em até 12x)</strong> e concluir o pagamento. Seus dados de cartão são digitados diretamente lá — nunca passam pelo nosso site.</p>
+                ${user ? `
+                  <strong>Pagamento via Pix</strong>
+                  <p>Ao confirmar, vamos gerar um <strong>QR code Pix</strong> na própria tela do pedido — é só escanear ou usar o código copia e cola no app do seu banco. A confirmação é automática assim que o pagamento cai.</p>
+                ` : `
+                  <strong>Pagamento seguro via Pagar.me</strong>
+                  <p>Ao confirmar, você será direcionado para a página segura da Pagar.me para escolher entre <strong>Pix</strong> ou <strong>Cartão de crédito</strong> e concluir o pagamento. Seus dados de cartão são digitados diretamente lá — nunca passam pelo nosso site.</p>
+                `}
               </div>
             </div>
           </div>
@@ -240,23 +246,18 @@ export function afterRender() {
       });
       if (!createRes.ok) throw new Error('Não foi possível registrar o pedido. Tente novamente.');
 
-      const totalPeças = order.items.reduce((s, i) => s + i.qty, 0);
-      const items = [{
-        quantity: 1,
-        price: Math.round(order.total * 100),
-        description: `Pedido ${order.id} — Gratitude Têxtil (${totalPeças} peça${totalPeças > 1 ? 's' : ''})`,
-      }];
+      if (getCurrentUser()) {
+        // Cliente atacadista: cobrança Pix direta, sem sair do site - a
+        // própria página do pedido mostra o QR code e fica aguardando a
+        // confirmação automática (webhook).
+        await createPixCharge({ orderId: order.id });
+        clearCart();
+        navigate(`/pedido/${order.id}`);
+        return;
+      }
+
       const redirectUrl = `${location.origin}${location.pathname}#/pedido/${order.id}`;
-      const paymentUrl = await createInfinitePayLink({
-        items,
-        orderNsu: order.id,
-        redirectUrl,
-        customer: {
-          name: `${data.firstName} ${data.lastName}`.trim(),
-          email: data.email,
-          phone_number: data.phone,
-        },
-      });
+      const paymentUrl = await createCheckoutLink({ orderId: order.id, redirectUrl });
       clearCart();
       window.location.href = paymentUrl;
     } catch (err) {
@@ -300,7 +301,7 @@ function buildOrder(data) {
     customer: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, document: onlyDigits(data.cpf) },
     address: { cep: data.cep, street: data.street, number: data.number, complement: data.complement, neighborhood: data.neighborhood, city: data.city, state: data.state },
     shipping: selectedShipping,
-    payment: { method: 'infinitepay', status: 'aguardando confirmação' },
+    payment: { method: 'pagarme', status: 'aguardando confirmação' },
     coupon,
     subtotal, discount, shippingDiscount, shippingPrice: finalShipping, total,
   };

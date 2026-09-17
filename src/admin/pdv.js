@@ -1,7 +1,7 @@
 import { isUnlocked, renderGate, lock } from './adminAuth.js';
 import { getCatalogProducts } from '../services/catalogService.js';
 import { saveOrder, generatePdvOrderId } from './orderStore.js';
-import { createInfinitePayLink } from '../services/paymentService.js';
+import { createCheckoutLink } from '../services/paymentService.js';
 import { apiGet } from './apiClient.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -316,7 +316,7 @@ function renderCart() {
     <div class="pdv-pay-tabs">
       <button type="button" data-pay="dinheiro" class="${paymentMethod === 'dinheiro' ? 'active' : ''}">Dinheiro</button>
       <button type="button" data-pay="cartao" class="${paymentMethod === 'cartao' ? 'active' : ''}">Cartão (maquininha)</button>
-      <button type="button" data-pay="infinitepay" class="${paymentMethod === 'infinitepay' ? 'active' : ''}">Pix/Cartão InfinitePay</button>
+      <button type="button" data-pay="pagarme" class="${paymentMethod === 'pagarme' ? 'active' : ''}">Pix/Cartão Pagar.me</button>
     </div>
 
     <button type="button" class="btn btn-primary btn-block" id="pdv-finish-btn">Finalizar venda — ${formatBRL(total)}</button>
@@ -350,24 +350,21 @@ async function finishSale() {
     customer: { firstName: name || 'Cliente balcão', lastName: '', email: '', phone },
     address: null,
     shipping: { type: 'retirada', label: 'Venda no balcão', price: 0, days: 0 },
-    payment: { method: paymentMethod, status: paymentMethod === 'infinitepay' ? 'aguardando confirmação' : 'pago' },
+    payment: { method: paymentMethod, status: paymentMethod === 'pagarme' ? 'aguardando confirmação' : 'pago' },
     coupon: null,
     subtotal, discount: manualDiscount, shippingDiscount: 0, shippingPrice: 0, total,
   };
 
   finishBtn.disabled = true;
 
-  if (paymentMethod === 'infinitepay') {
+  if (paymentMethod === 'pagarme') {
     finishBtn.textContent = 'Gerando cobrança...';
     try {
-      const items = [{ quantity: 1, price: Math.round(total * 100), description: `Venda balcão ${order.id} — Gratitude Têxtil` }];
-      const url = await createInfinitePayLink({
-        items,
-        orderNsu: order.id,
-        redirectUrl: `${location.origin}/admin.html`,
-        customer: { name: name || undefined, phone_number: phone || undefined },
-      });
       await saveOrder(order);
+      const url = await createCheckoutLink({
+        orderId: order.id,
+        redirectUrl: `${location.origin}/admin.html`,
+      });
       showPixReceipt(order, url);
     } catch (err) {
       finishBtn.disabled = false;
@@ -394,7 +391,7 @@ function showPixReceipt(order, paymentUrl) {
       <div class="modal-box" style="text-align:center;">
         <h2 style="font-size:18px;margin-bottom:10px;">Cobrança gerada!</h2>
         <p style="color:var(--color-text-soft);font-size:13px;margin-bottom:16px;">Peça para o cliente escanear ou abra o link abaixo para pagar via Pix ou cartão.</p>
-        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block" style="margin-bottom:10px;">Abrir cobrança InfinitePay</a>
+        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block" style="margin-bottom:10px;">Abrir cobrança Pagar.me</a>
         <p style="font-size:11px;color:var(--color-text-faint);word-break:break-all;margin-bottom:16px;">${escapeHtml(paymentUrl)}</p>
         <button type="button" class="btn btn-outline btn-block" id="pdv-new-sale">Nova venda</button>
       </div>

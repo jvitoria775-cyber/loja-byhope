@@ -3,16 +3,11 @@ import { seedDemoData, clearDemoData, hasDemoOrders } from '../mockData.js';
 import { getAllOrders } from '../orderStore.js';
 import {
   getStoreSettings, saveStoreSettings, getStoreDiscountPercent, setStoreDiscountPercent,
-  getShippingConfig, saveShippingConfig, getMelhorEnvioStatus,
+  getShippingConfig, saveShippingConfig, getMelhorEnvioStatus, getPagarmeStatus,
 } from '../settingsStore.js';
 import { setStockForAllProducts } from '../productAdminStore.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
-
-function maskHandle(handle) {
-  if (handle.length <= 2) return handle;
-  return handle[0] + '•'.repeat(Math.max(handle.length - 2, 1)) + handle[handle.length - 1];
-}
 
 const CATEGORY_LABELS = {
   camiseta: 'Camisetas', babylook: 'Baby Look', cropped: 'Cropped',
@@ -24,8 +19,8 @@ const DEFAULT_CATEGORY_WEIGHTS_KG = {
 const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
 export async function render() {
-  const [store, discountPercent, orders, shippingConfig, melhorEnvio] = await Promise.all([
-    getStoreSettings(), getStoreDiscountPercent(), getAllOrders(), getShippingConfig(), getMelhorEnvioStatus(),
+  const [store, discountPercent, orders, shippingConfig, melhorEnvio, pagarme] = await Promise.all([
+    getStoreSettings(), getStoreDiscountPercent(), getAllOrders(), getShippingConfig(), getMelhorEnvioStatus(), getPagarmeStatus(),
   ]);
   const seeded = hasDemoOrders(orders);
 
@@ -67,12 +62,14 @@ export async function render() {
       <div class="panel">
         <h2>Integrações</h2>
         <div class="integration-row">
-          <div>${icon('creditCard', 'icon')}<div><strong>InfinitePay</strong><span>Gateway de pagamento (Pix e cartão)</span></div></div>
+          <div>${icon('creditCard', 'icon')}<div><strong>Pagar.me</strong><span>Gateway de pagamento (varejo: cartão + Pix · atacado: só Pix)</span></div></div>
           <div style="text-align:right;">
-            <span class="badge-pill badge-pago">Conectado</span>
-            <div style="font-size:11.5px;color:var(--color-text-faint);margin-top:4px;">handle: ${escapeHtml(maskHandle('alivio'))}</div>
+            ${pagarme.connected
+              ? `<span class="badge-pill badge-pago">Configurada${pagarme.env === 'test' ? ' (teste)' : ''}</span>`
+              : `<span class="badge-pill badge-pendente">Não configurada</span>`}
           </div>
         </div>
+        ${!pagarme.connected ? `<p style="font-size:11.5px;color:var(--color-text-faint);margin-top:10px;">Configure <code>PAGARME_SECRET_KEY</code> nas variáveis de ambiente da Vercel para ativar.</p>` : ''}
         <div class="integration-row">
           <div>${icon('truck', 'icon')}<div><strong>Melhor Envio</strong><span>Cotação e etiquetas de frete (Correios)</span></div></div>
           <div style="text-align:right;">

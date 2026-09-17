@@ -28,6 +28,10 @@ export default async function handler(req, res) {
       hiddenProductIds: map.hidden_products || [],
       shippingConfig: { ...DEFAULT_SHIPPING_CONFIG, ...(map.shipping_config || {}) },
       melhorEnvio,
+      pagarme: {
+        connected: !!process.env.PAGARME_SECRET_KEY,
+        env: (process.env.PAGARME_ENV || 'test').toLowerCase(),
+      },
     });
   }
 
