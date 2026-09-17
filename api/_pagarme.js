@@ -16,7 +16,7 @@ function onlyDigits(v) {
 }
 
 function getSecretKey() {
-  const key = process.env.PAGARME_SECRET_KEY;
+  const key = (process.env.PAGARME_SECRET_KEY || '').trim();
   if (!key) throw new Error('Pagar.me não configurada (PAGARME_SECRET_KEY ausente nas variáveis de ambiente da Vercel).');
   return key;
 }
