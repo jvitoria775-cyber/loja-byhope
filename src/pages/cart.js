@@ -1,6 +1,6 @@
 import { getItems, getSubtotal, updateQty, removeItem, getCoupon, applyCoupon, removeCoupon } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
-import { simulateShipping, isValidCep } from '../services/shippingService.js';
+import { calculateShipping, isValidCep } from '../services/shippingService.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
@@ -170,17 +170,30 @@ function onCartChange() {
   afterRender();
 }
 
-function calcShipping() {
+async function calcShipping() {
   const input = document.getElementById('cep-input');
   const resultsEl = document.getElementById('shipping-results');
   if (!isValidCep(input.value)) {
     resultsEl.innerHTML = `<div class="coupon-feedback error">${icon('x', 'icon icon-sm')} CEP inválido. Digite um CEP no formato 00000-000.</div>`;
     return;
   }
-  const result = simulateShipping(input.value);
-  resultsEl.innerHTML = `
-    <p class="form-hint" style="margin-bottom:10px;">Região: ${result.region}</p>
-    ${result.options.map((opt) => `
+
+  resultsEl.innerHTML = `<p class="form-hint">Calculando frete pelos Correios...</p>`;
+
+  let result;
+  try {
+    result = await calculateShipping(input.value, getItems());
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="coupon-feedback error">${icon('x', 'icon icon-sm')} ${escapeHtml(err.message)}</div>`;
+    return;
+  }
+
+  if (!result.options.length) {
+    resultsEl.innerHTML = `<div class="coupon-feedback error">${icon('x', 'icon icon-sm')} ${escapeHtml(result.error || 'Nenhuma opção de frete disponível para este CEP.')}</div>`;
+    return;
+  }
+
+  resultsEl.innerHTML = result.options.map((opt) => `
       <label class="shipping-option ${chosenShipping?.type === opt.type ? 'active' : ''}" data-shipping-option="${opt.type}">
         <span class="shipping-option-left">
           <input type="radio" name="shipping-opt" ${chosenShipping?.type === opt.type ? 'checked' : ''} />
@@ -190,8 +203,7 @@ function calcShipping() {
           </span>
         </span>
         <span class="shipping-option-price">${formatBRL(opt.price)}</span>
-      </label>`).join('')}
-  `;
+      </label>`).join('');
 
   resultsEl.querySelectorAll('[data-shipping-option]').forEach((el) => {
     el.addEventListener('click', () => {
