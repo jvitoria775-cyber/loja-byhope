@@ -176,6 +176,6 @@ export async function deleteMockProduct(id) {
 // (isso exigiria alterar o código-fonte da loja). "Excluir" um produto
 // oficial apenas o esconde da listagem do painel administrativo.
 export async function hideOfficialProduct(id) {
-  await apiPut(`/products/${id}?action=hide`, {});
+  await apiPut(`/products/${id}`, { action: 'hide' });
   invalidateSettingsCache();
 }

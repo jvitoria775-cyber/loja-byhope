@@ -1,17 +1,24 @@
-import { sql, handlePreflight, readJsonBody, sendJson, getQueryParam } from '../_db.js';
+import { sql, handlePreflight, readJsonBody, sendJson, getIdFromUrl } from '../_db.js';
 import { requireAuth } from '../_auth.js';
 
 // GET: busca um pedido específico (público - usado pela página de
 // confirmação após o pagamento, o próprio cliente lendo o pedido dele).
-// PATCH ?action=confirm-payment: marca como pago com os dados que a
-// InfinitePay devolve no redirecionamento (público de propósito - o
-// cliente confirmando o próprio pagamento, sem estar logado como admin;
-// só mexe nos campos de pagamento).
-// PATCH (sem action): atualiza status de separação/envio e código de
+// PATCH com { action: "confirm-payment" } no corpo: marca como pago com os
+// dados que a InfinitePay devolve no redirecionamento (público de
+// propósito - o cliente confirmando o próprio pagamento, sem estar logado
+// como admin; só mexe nos campos de pagamento).
+// PATCH sem essa ação: atualiza status de separação/envio e código de
 // rastreio (protegido - só o painel administrativo).
+//
+// A "ação" vai dentro do corpo (JSON), não na query string da URL - nesse
+// ambiente da Vercel (função Node "solta", sem Next.js), tanto os
+// parâmetros de rota dinâmica quanto a query string de req.url não vêm
+// preenchidos de forma confiável quando a rota é reescrita internamente;
+// o corpo da requisição (req.body) é o único canal que se mostrou
+// confiável nos testes.
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
-  const id = req.url.split('?')[0].split('/').filter(Boolean).pop();
+  const id = getIdFromUrl(req);
 
   if (req.method === 'GET') {
     const { rows } = await sql`SELECT data FROM orders WHERE id = ${id}`;
@@ -20,21 +27,21 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    const action = getQueryParam(req, 'action');
-    if (action === 'confirm-payment') return handleConfirmPayment(req, res, id);
-    return handleUpdate(req, res, id);
+    const body = readJsonBody(req);
+    if (body.action === 'confirm-payment') return handleConfirmPayment(res, id, body);
+    return handleUpdate(req, res, id, body);
   }
 
   return sendJson(res, 405, { error: 'Método não permitido.' });
 }
 
-async function handleUpdate(req, res, id) {
+async function handleUpdate(req, res, id, body) {
   if (!requireAuth(req, res)) return;
   const { rows } = await sql`SELECT data FROM orders WHERE id = ${id}`;
   if (!rows.length) return sendJson(res, 404, { error: 'Pedido não encontrado.' });
 
   const order = rows[0].data;
-  const { fulfillmentStatus, trackingCode } = readJsonBody(req);
+  const { fulfillmentStatus, trackingCode } = body;
 
   if (fulfillmentStatus) {
     order.fulfillmentStatus = fulfillmentStatus;
@@ -58,8 +65,8 @@ async function handleUpdate(req, res, id) {
   return sendJson(res, 200, { order });
 }
 
-async function handleConfirmPayment(req, res, id) {
-  const { captureMethod, transactionNsu, receiptUrl } = readJsonBody(req);
+async function handleConfirmPayment(res, id, body) {
+  const { captureMethod, transactionNsu, receiptUrl } = body;
   const { rows } = await sql`SELECT data FROM orders WHERE id = ${id}`;
   if (!rows.length) return sendJson(res, 404, { error: 'Pedido não encontrado.' });
 

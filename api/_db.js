@@ -38,24 +38,10 @@ export function sendJson(res, statusCode, body) {
   res.status(statusCode).json(body);
 }
 
-// Extrai os segmentos de caminho depois do nome do recurso (ex.: para
-// resourceName="orders" e uma requisição a /api/orders/GT123/confirm-
-// -payment, devolve ["GT123", "confirm-payment"]).
-// Não depende de req.query.<param> das rotas dinâmicas ([...path].js) -
-// nesse projeto (função Node "solta", sem Next.js) esse campo não veio
-// preenchido de forma confiável, então lemos req.url diretamente.
-export function getPathSegments(req, resourceName) {
-  const pathname = (req.url || '').split('?')[0];
-  const parts = pathname.split('/').filter(Boolean);
-  const resIdx = parts.lastIndexOf(resourceName);
-  if (resIdx !== -1) return parts.slice(resIdx + 1).map((s) => decodeURIComponent(s));
-  return parts.map((s) => decodeURIComponent(s));
-}
-
-// Lê um parâmetro de query string direto de req.url (mesmo motivo do
-// getPathSegments acima - não confiar em req.query nesse ambiente).
-export function getQueryParam(req, name) {
-  const [, search] = (req.url || '').split('?');
-  if (!search) return null;
-  return new URLSearchParams(search).get(name);
+// Extrai o :id de uma rota de segmento único (ex.: api/orders/[id].js).
+// Não depende de req.query.<param> - nesse projeto (função Node "solta",
+// sem Next.js) esse campo não vem preenchido de forma confiável quando a
+// rota é reescrita internamente, então lemos req.url diretamente.
+export function getIdFromUrl(req) {
+  return req.url.split('?')[0].split('/').filter(Boolean).pop();
 }
