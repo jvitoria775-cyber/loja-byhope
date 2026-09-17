@@ -12,21 +12,34 @@
 // cada clique de filtro - invalidateCatalogCache() força recarregar depois
 // de uma escrita feita no painel.
 import { products as rawProducts, getImagesForColor } from '../data/products.js';
+import { getItem } from '../utils/storage.js';
 
 let _cache = null;
 let _cachePromise = null;
 
+// Lê o token de cliente atacadista direto do localStorage (mesma chave
+// usada por src/context/authStore.js) em vez de importar authStore.js
+// aqui - authStore.js já importa invalidateCatalogCache() deste arquivo,
+// e um import circular entre os dois seria frágil.
+function getWholesaleToken() {
+  return getItem('wholesale_session', null)?.token || null;
+}
+
 async function loadState() {
   if (_cache) return _cache;
   if (!_cachePromise) {
+    const token = getWholesaleToken();
+    const productsHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
+
     _cachePromise = Promise.all([
-      fetch('/api/products').then((r) => r.json()),
+      fetch('/api/products', { headers: productsHeaders }).then((r) => r.json()),
       fetch('/api/settings').then((r) => r.json()),
     ])
       .then(([productsRes, settingsRes]) => {
         _cache = {
           overrides: productsRes.overrides || {},
           discountPercent: Number(settingsRes.discountPercent) || 0,
+          isWholesale: !!token,
         };
         return _cache;
       })
@@ -41,6 +54,14 @@ async function loadState() {
 export function invalidateCatalogCache() {
   _cache = null;
   _cachePromise = null;
+}
+
+// Se o visitante atual está autenticado como cliente atacadista (usado
+// pela página de produto para decidir entre mostrar o preço de atacado ou
+// a chamada para cadastro - só sabe isso depois que loadState() já rodou
+// ao menos uma vez nesta sessão de navegação).
+export function isWholesaleSession() {
+  return !!_cache?.isWholesale;
 }
 
 // Arredonda para cima até a casa ",90" mais próxima (nunca abaixo do valor
@@ -102,6 +123,16 @@ function applyOverride(p, overrides, storeDiscountPercent) {
     oldPrice = roundUpToNinety(normalPrice / (1 - storeDiscountPercent / 100));
   }
 
+  // wholesaleTiers só vem preenchido na resposta da API quando o servidor
+  // já validou que quem pediu tem direito a ver preço de atacado (admin do
+  // painel ou cliente atacadista autenticado) - ver api/products/index.js.
+  // Fica como um campo À PARTE (não mexe em price/oldPrice, que continuam
+  // sendo sempre o preço de VAREJO) - assim o painel administrativo, que
+  // reaproveita esta mesma função para a coluna de preço normal, nunca
+  // mistura os dois; quem decide usar o preço de atacado no lugar do
+  // varejo é a página de produto, explicitamente.
+  const wholesalePrice = Number(ov.wholesaleTiers?.tier1) > 0 ? Number(ov.wholesaleTiers.tier1) : null;
+
   return {
     ...p,
     stockByColorSize,
@@ -109,6 +140,7 @@ function applyOverride(p, overrides, storeDiscountPercent) {
     totalStock,
     price,
     oldPrice,
+    wholesalePrice,
   };
 }
 

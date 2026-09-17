@@ -1,4 +1,4 @@
-import { getCatalogProductBySlug, getCatalogRelated, getImagesForColor } from '../services/catalogService.js';
+import { getCatalogProductBySlug, getCatalogRelated, getImagesForColor, isWholesaleSession } from '../services/catalogService.js';
 import { formatBRL, installmentText, calcDiscountPercent } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
@@ -68,9 +68,16 @@ export async function render(params, query = {}) {
           <h1 class="pd-title">${escapeHtml(product.name)}</h1>
 
           <div class="pd-price-block">
-            <span class="pd-price-current">${formatBRL(product.price)}</span>
-            ${product.oldPrice ? `<span class="pd-price-old">${formatBRL(product.oldPrice)}</span> <span class="tag-badge sale">-${calcDiscountPercent(product.price, product.oldPrice)}%</span>` : ''}
-            <div class="pd-installments">${installmentText(product.price, 3)}</div>
+            ${product.wholesalePrice ? `<div style="margin-bottom:8px;"><span class="wholesale-badge">${icon('store', 'icon icon-sm')} Preço de atacado</span></div>` : ''}
+            <span class="pd-price-current">${formatBRL(product.wholesalePrice || product.price)}</span>
+            ${product.wholesalePrice
+              ? `<span class="pd-price-old">${formatBRL(product.price)}</span> <span class="tag-badge sale">-${calcDiscountPercent(product.wholesalePrice, product.price)}%</span>`
+              : product.oldPrice ? `<span class="pd-price-old">${formatBRL(product.oldPrice)}</span> <span class="tag-badge sale">-${calcDiscountPercent(product.price, product.oldPrice)}%</span>` : ''}
+            <div class="pd-installments">${installmentText(product.wholesalePrice || product.price, 3)}</div>
+            ${!product.wholesalePrice && !isWholesaleSession() ? `
+              <div class="wholesale-cta">
+                <p>Quer comprar com preço de atacado? <a href="#/atacado">Cadastre-se gratuitamente</a> e desbloqueie preços exclusivos para lojistas.</p>
+              </div>` : ''}
           </div>
 
           <p class="pd-desc">${escapeHtml(product.description)}</p>
@@ -171,6 +178,15 @@ function bindSizeEvents() {
   });
 }
 
+// O carrinho guarda o preço já "congelado" no momento em que o item foi
+// adicionado (ver context/cartStore.js) - por isso, se o produto tem preço
+// de atacado desbloqueado, ele precisa ir como o `price` do item desde já,
+// nunca recalculado depois (é o mesmo motivo por trás de o pedido salvo
+// nunca mudar de valor mesmo que o preço do produto mude posteriormente).
+function cartProduct(product) {
+  return product.wholesalePrice ? { ...product, price: product.wholesalePrice } : product;
+}
+
 function renderThumbs(images) {
   return images.map((img, i) => `
     <button class="gallery-thumb ${i === 0 ? 'active' : ''}" data-thumb="${i}" aria-label="Ver imagem ${i + 1}">
@@ -242,14 +258,14 @@ export function afterRender() {
 
   document.getElementById('add-to-cart-btn')?.addEventListener('click', () => {
     if (!validateSelection()) return;
-    addItem(product, selectedSize, selectedColor, qty);
+    addItem(cartProduct(product), selectedSize, selectedColor, qty);
     showToast(`${product.name} adicionado ao carrinho!`, 'success');
     openCartDrawer();
   });
 
   document.getElementById('buy-now-btn')?.addEventListener('click', () => {
     if (!validateSelection()) return;
-    addItem(product, selectedSize, selectedColor, qty);
+    addItem(cartProduct(product), selectedSize, selectedColor, qty);
     navigate('/checkout');
   });
 

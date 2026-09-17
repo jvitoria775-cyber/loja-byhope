@@ -78,6 +78,7 @@ export async function getAdminProducts() {
       const m = mergedById.get(p.id);
       const price = ov.price ?? p.price;
       const promoPrice = Number(ov.promoPrice) > 0 ? Number(ov.promoPrice) : null;
+      const wholesalePrice = Number(ov.wholesaleTiers?.tier1) > 0 ? Number(ov.wholesaleTiers.tier1) : null;
       return {
         id: p.id,
         sku: skuFor(p),
@@ -88,6 +89,7 @@ export async function getAdminProducts() {
         cost: ov.cost ?? PRODUCT_COSTS[p.category] ?? 0,
         price,
         promoPrice,
+        wholesalePrice,
         // Preço/valor riscado REALMENTE em vigor na loja agora (considera
         // tanto a promoção específica deste produto quanto o desconto geral
         // da loja definido em Configurações, o que estiver ativo).
@@ -113,6 +115,7 @@ export async function getAdminProducts() {
       stockBySize,
       totalStock: totalStock(stockBySize),
       promoPrice: Number(p.promoPrice) > 0 ? Number(p.promoPrice) : null,
+      wholesalePrice: Number(p.wholesaleTiers?.tier1) > 0 ? Number(p.wholesaleTiers.tier1) : null,
       colorImages: p.colorImages || {},
       official: false,
       demo: true,
@@ -158,6 +161,17 @@ export async function updateProductPrice(id, price) {
 export async function updateProductPromoPrice(id, promoPrice) {
   const value = Number(promoPrice) > 0 ? Number(promoPrice) : null;
   await apiPut(`/products/${id}`, { promoPrice: value });
+  invalidateProductsCache();
+}
+
+// Preço de atacado (tier1 - hoje só existe essa tabela, mas o campo já
+// nasce como um objeto { tier1, tier2, tier3 } no banco, pronto para
+// quando existir mais de uma tabela de atacado). Passar 0 ou null remove o
+// preço de atacado - o produto volta a mostrar só o preço de varejo para
+// clientes atacadistas.
+export async function updateProductWholesalePrice(id, tier1) {
+  const value = Number(tier1) > 0 ? Number(tier1) : null;
+  await apiPut(`/products/${id}`, { wholesaleTiers: { tier1: value } });
   invalidateProductsCache();
 }
 

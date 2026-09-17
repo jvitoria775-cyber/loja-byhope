@@ -36,7 +36,12 @@ export function bindGridInteractions(container) {
         showToast('Produto sem estoque disponível no momento.', 'error');
         return;
       }
-      addItem(product, size, color, 1);
+      // Se o produto tem preço de atacado desbloqueado para este visitante,
+      // o carrinho precisa guardar esse preço desde já (congelado) - ver
+      // comentário equivalente em pages/product.js sobre por que o preço
+      // nunca é recalculado depois de ir para o carrinho.
+      const cartProduct = product.wholesalePrice ? { ...product, price: product.wholesalePrice } : product;
+      addItem(cartProduct, size, color, 1);
       showToast(`${product.name} adicionado ao carrinho (Tam. ${size} / ${color})`, 'success');
     });
   });

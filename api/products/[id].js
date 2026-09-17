@@ -39,6 +39,9 @@ function mergeOverride(current, patch) {
   if (patch.price !== undefined) next.price = patch.price;
   if (patch.promoPrice !== undefined) next.promoPrice = patch.promoPrice;
   if (patch.cost !== undefined) next.cost = patch.cost;
+  if (patch.wholesaleTiers) {
+    next.wholesaleTiers = { ...(current.wholesaleTiers || {}), ...patch.wholesaleTiers };
+  }
   if (patch.stockByColorSize) {
     next.stockByColorSize = { ...(current.stockByColorSize || {}) };
     Object.entries(patch.stockByColorSize).forEach(([colorSlug, bySize]) => {

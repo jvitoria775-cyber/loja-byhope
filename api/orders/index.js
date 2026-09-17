@@ -1,9 +1,14 @@
 import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
-import { requireAuth } from '../_auth.js';
+import { requireAuth, verifyCustomerToken } from '../_auth.js';
 
 // GET: lista todos os pedidos (protegido - só o painel administrativo).
 // POST: cria um novo pedido (público - usado pelo checkout da loja e pelo
-// PDV; qualquer cliente precisa poder registrar o próprio pedido).
+// PDV; qualquer cliente precisa poder registrar o próprio pedido). Se vier
+// um token de cliente atacadista válido, o pedido é vinculado a ele
+// (customer_id) - usado em "Meus pedidos" na área da conta. O preço de
+// cada item já vem congelado do carrinho (não é recalculado aqui), então
+// o pedido sempre mostra o valor realmente pago, mesmo que o preço do
+// produto mude depois.
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
@@ -25,8 +30,16 @@ export default async function handler(req, res) {
     }
     if (typeof order.trackingCode !== 'string') order.trackingCode = '';
 
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    const customerId = verifyCustomerToken(token);
+    if (customerId) {
+      order.customerId = customerId;
+      order.customerType = 'wholesale';
+    }
+
     await sql`
-      INSERT INTO orders (id, data, channel, status, fulfillment_status, customer_email, is_demo)
+      INSERT INTO orders (id, data, channel, status, fulfillment_status, customer_email, is_demo, customer_id)
       VALUES (
         ${order.id},
         ${JSON.stringify(order)}::jsonb,
@@ -34,12 +47,14 @@ export default async function handler(req, res) {
         ${order.payment?.status || 'pendente'},
         ${order.fulfillmentStatus || 'pendente'},
         ${(order.customer?.email || '').toLowerCase()},
-        ${!!order.demo}
+        ${!!order.demo},
+        ${customerId || null}
       )
       ON CONFLICT (id) DO UPDATE SET
         data = EXCLUDED.data,
         status = EXCLUDED.status,
         fulfillment_status = EXCLUDED.fulfillment_status,
+        customer_id = EXCLUDED.customer_id,
         updated_at = now()
     `;
     return sendJson(res, 201, { ok: true, order });

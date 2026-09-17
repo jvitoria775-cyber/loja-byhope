@@ -1,4 +1,4 @@
-import { getAdminProducts, updateProductStockForColor, updateProductPrice, updateProductPromoPrice, addMockProduct, deleteMockProduct, hideOfficialProduct, PRODUCT_COSTS } from '../productAdminStore.js';
+import { getAdminProducts, updateProductStockForColor, updateProductPrice, updateProductPromoPrice, updateProductWholesalePrice, addMockProduct, deleteMockProduct, hideOfficialProduct, PRODUCT_COSTS } from '../productAdminStore.js';
 import { formatBRL, calcDiscountPercent } from '../../utils/format.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
@@ -71,7 +71,7 @@ function renderTable() {
             <td>${escapeHtml(p.categoryLabel || p.category)}</td>
             <td>${(p.colors || []).length} cor(es)</td>
             <td>${formatBRL(p.cost)}</td>
-            <td>${priceCellHtml(p)}</td>
+            <td>${priceCellHtml(p)}${p.wholesalePrice ? `<br><span class="badge-pill badge-pago" style="margin-top:4px;display:inline-block;">atacado ${formatBRL(p.wholesalePrice)}</span>` : ''}</td>
             <td>${p.totalStock <= LOW_STOCK_THRESHOLD ? `<span class="badge-pill badge-pendente">${p.totalStock} un.</span>` : `${p.totalStock} un.`}</td>
             <td><button type="button" class="btn btn-outline btn-sm" data-edit="${p.id}">${icon('edit', 'icon icon-sm')} Editar</button></td>
           </tr>`).join('')}
@@ -174,7 +174,11 @@ function openEditModal(id) {
             <label>Preço promocional (R$, opcional)<input type="number" step="0.01" min="0" name="promoPrice" value="${product.promoPrice ?? ''}" placeholder="Sem promoção"></label>
           </div>
           <p style="font-size:11.5px;color:var(--color-text-faint);">Se o preço promocional for preenchido e menor que o normal, ele passa a ser o preço realmente cobrado — o normal aparece riscado na loja e no PDV. ${product.official ? 'Se este campo ficar vazio e houver um desconto geral ativo (Configurações), o preço normal continua sendo o valor cobrado — só aparece um preço "de" riscado maior, de vitrine.' : ''}</p>
-          <button type="submit" class="btn btn-outline btn-sm">Salvar preço</button>
+          <div class="form-row" style="margin-top:10px;">
+            <label>Preço atacado — tabela 1 (R$, opcional)<input type="number" step="0.01" min="0" name="wholesalePrice" value="${product.wholesalePrice ?? ''}" placeholder="Sem preço de atacado"></label>
+          </div>
+          <p style="font-size:11.5px;color:var(--color-text-faint);">Exibido só para clientes cadastrados como atacadistas, no lugar do preço normal — a promoção acima não se aplica a eles. Deixe em branco para não vender este produto no atacado.</p>
+          <button type="submit" class="btn btn-outline btn-sm">Salvar preços</button>
         </form>
 
         <div style="margin-top:16px;" id="stock-section">${stockSectionHtml()}</div>
@@ -215,6 +219,8 @@ function openEditModal(id) {
     await updateProductPrice(product.id, price);
     const promoRaw = data.get('promoPrice');
     await updateProductPromoPrice(product.id, promoRaw ? Number(promoRaw) : null);
+    const wholesaleRaw = data.get('wholesalePrice');
+    await updateProductWholesalePrice(product.id, wholesaleRaw ? Number(wholesaleRaw) : null);
     await refresh();
     await closeEditModal();
   });

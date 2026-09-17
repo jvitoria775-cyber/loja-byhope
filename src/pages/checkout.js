@@ -6,7 +6,7 @@ import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 import { showToast } from '../components/toast.js';
-import { getCurrentUser } from '../context/authStore.js';
+import { getCurrentUser, getToken } from '../context/authStore.js';
 import { setItem, getItem } from '../utils/storage.js';
 
 let shippingOptions = [];
@@ -50,23 +50,23 @@ export function render() {
           <div class="checkout-section">
             <h3><span class="step-num">1</span> Dados pessoais</h3>
             <div class="form-grid">
-              ${field('firstName', 'Nome', 'text', user?.name?.split(' ')[0] || '')}
-              ${field('lastName', 'Sobrenome', 'text', user?.name?.split(' ').slice(1).join(' ') || '')}
+              ${field('firstName', 'Nome', 'text', user?.fullName?.split(' ')[0] || '')}
+              ${field('lastName', 'Sobrenome', 'text', user?.fullName?.split(' ').slice(1).join(' ') || '')}
               ${field('email', 'E-mail', 'email', user?.email || '', 'full')}
-              ${field('phone', 'Telefone / WhatsApp', 'tel', '', 'full', '(11) 91234-5678')}
+              ${field('phone', 'Telefone / WhatsApp', 'tel', user?.phone || '', 'full', '(11) 91234-5678')}
             </div>
           </div>
 
           <div class="checkout-section">
             <h3><span class="step-num">2</span> Endereço de entrega</h3>
             <div class="form-grid">
-              ${field('cep', 'CEP', 'text', '', '', '00000-000')}
-              ${field('street', 'Rua', 'text', '', '', '')}
-              ${field('number', 'Número', 'text', '', '', '')}
-              ${field('complement', 'Complemento (opcional)', 'text', '', '', 'Apto, bloco...', false)}
-              ${field('neighborhood', 'Bairro', 'text', '', '', '')}
-              ${field('city', 'Cidade', 'text', '', '', '')}
-              ${stateField()}
+              ${field('cep', 'CEP', 'text', user?.address?.cep || '', '', '00000-000')}
+              ${field('street', 'Rua', 'text', user?.address?.street || '', '', '')}
+              ${field('number', 'Número', 'text', user?.address?.number || '', '', '')}
+              ${field('complement', 'Complemento (opcional)', 'text', user?.address?.complement || '', '', 'Apto, bloco...', false)}
+              ${field('neighborhood', 'Bairro', 'text', user?.address?.neighborhood || '', '', '')}
+              ${field('city', 'Cidade', 'text', user?.address?.city || '', '', '')}
+              ${stateField(user?.address?.state)}
             </div>
           </div>
 
@@ -113,14 +113,14 @@ function field(name, label, type, value = '', extraClass = '', placeholder = '',
     </div>`;
 }
 
-function stateField() {
+function stateField(selected = '') {
   const states = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
   return `
     <div class="form-field" data-field="state">
       <label for="f-state">Estado</label>
       <select id="f-state" name="state" required>
         <option value="">Selecione</option>
-        ${states.map((s) => `<option value="${s}">${s}</option>`).join('')}
+        ${states.map((s) => `<option value="${s}" ${selected === s ? 'selected' : ''}>${s}</option>`).join('')}
       </select>
       <span class="error-msg">Selecione um estado.</span>
     </div>`;
@@ -199,9 +199,12 @@ export function afterRender() {
     submitBtn.textContent = 'Gerando pagamento seguro...';
 
     try {
+      const token = getToken();
+      const orderHeaders = { 'Content-Type': 'application/json' };
+      if (token) orderHeaders.Authorization = `Bearer ${token}`;
       const createRes = await fetch('/api/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: orderHeaders,
         body: JSON.stringify(order),
       });
       if (!createRes.ok) throw new Error('Não foi possível registrar o pedido. Tente novamente.');

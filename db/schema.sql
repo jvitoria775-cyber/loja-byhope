@@ -58,3 +58,33 @@ INSERT INTO settings (key, value) VALUES
   ('store_info', '{"name":"","cnpj":"","email":"","phone":"","cep":"","street":"","number":"","city":"","state":""}'),
   ('hidden_products', '[]')
 ON CONFLICT (key) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- Segunda etapa: clientes atacadistas com preço diferenciado.
+-- product_overrides.data ganha um campo novo "wholesaleTiers"
+-- ({tier1, tier2, tier3}, só tier1 usado por enquanto) - não precisa de
+-- migração de schema porque a coluna já é JSONB (sem forma fixa).
+-- ---------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS wholesale_customers (
+  id             TEXT PRIMARY KEY,
+  email          TEXT NOT NULL UNIQUE,
+  password_hash  TEXT NOT NULL,
+  doc_type       TEXT NOT NULL,        -- 'cpf' | 'cnpj'
+  doc_number     TEXT NOT NULL UNIQUE, -- só dígitos
+  data           JSONB NOT NULL,       -- fullName, storeName, phone, address{cep,street,number,complement,neighborhood,city,state}
+  status         TEXT NOT NULL DEFAULT 'active', -- pronto para 'pending'/'blocked' no futuro, sem uso agora
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+  token       TEXT PRIMARY KEY,
+  customer_id TEXT NOT NULL REFERENCES wholesale_customers(id) ON DELETE CASCADE,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used        BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_id TEXT;
+CREATE INDEX IF NOT EXISTS orders_customer_id_idx ON orders (customer_id);

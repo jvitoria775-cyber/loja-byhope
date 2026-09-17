@@ -1,9 +1,11 @@
 import { icon } from './icons.js';
 import { getCount } from '../context/cartStore.js';
 import { getFavoritesCount } from '../context/favoritesStore.js';
-import { getCurrentUser } from '../context/authStore.js';
+import { getCurrentUser, logout } from '../context/authStore.js';
 import { openCartDrawer } from './cartDrawer.js';
 import { navigate } from '../router.js';
+import { escapeHtml } from '../utils/dom.js';
+import { showToast } from './toast.js';
 
 const NAV_ITEMS = [
   { label: 'Início', href: '#/' },
@@ -32,10 +34,9 @@ export function renderHeader() {
         <input type="search" id="search-input" placeholder="Buscar camiseta, moletom..." aria-label="Buscar produtos" />
         <button type="submit" aria-label="Buscar">${icon('search', 'icon icon-sm')}</button>
       </form>
+      <div class="header-account" id="header-account">${renderAccountArea(user)}</div>
+
       <div class="header-actions">
-        <a href="#/login" class="icon-btn" id="account-btn" aria-label="${user ? 'Minha conta, ' + user.name : 'Entrar ou cadastrar'}" title="${user ? user.name : 'Entrar'}">
-          ${icon('user')}
-        </a>
         <a href="#/favoritos" class="icon-btn" aria-label="Favoritos">
           ${icon('heart')}
           <span class="badge" id="fav-count" ${getFavoritesCount() === 0 ? 'hidden' : ''}>${getFavoritesCount()}</span>
@@ -52,6 +53,7 @@ export function renderHeader() {
         <input type="search" id="mobile-search-input" placeholder="Buscar produtos..." style="flex:1;padding:12px 14px;border:1px solid var(--color-border);border-radius:999px;" />
         <button class="btn btn-primary btn-sm" type="submit">${icon('search', 'icon icon-sm')}</button>
       </form>
+      <div id="mobile-account-links">${renderMobileAccountLinks(user)}</div>
       <nav aria-label="Menu principal mobile" style="display:flex;flex-direction:column;padding:0 20px 24px;">
         ${NAV_ITEMS.map((item) => `<a href="${item.href}" data-nav-link style="padding:14px 0;border-bottom:1px solid var(--color-border-soft);font-size:15px;">${item.label}</a>`).join('')}
         <a href="#/sobre" style="padding:14px 0;border-bottom:1px solid var(--color-border-soft);font-size:15px;">Sobre nós</a>
@@ -59,6 +61,48 @@ export function renderHeader() {
       </nav>
     </div>
   </header>`;
+}
+
+function renderAccountArea(user) {
+  if (user) {
+    const firstName = escapeHtml((user.fullName || 'Cliente').split(' ')[0]);
+    return `
+    <div class="account-widget">
+      <button type="button" class="account-trigger" id="account-trigger" aria-haspopup="true" aria-expanded="false">
+        ${icon('user', 'icon icon-sm')}<span>Olá, ${firstName}</span>${icon('chevronDown', 'icon icon-sm')}
+      </button>
+      <div class="account-menu" id="account-menu" hidden>
+        <span class="account-menu-tag">${icon('store', 'icon icon-sm')} Cliente Atacadista</span>
+        <a href="#/minha-conta" data-account-menu-link>Minha Conta</a>
+        <a href="#/minha-conta?aba=pedidos" data-account-menu-link>Meus Pedidos</a>
+        <button type="button" id="account-logout-btn">Sair da conta</button>
+      </div>
+    </div>`;
+  }
+  return `
+  <div class="account-widget account-widget-guest">
+    <a href="#/login" class="account-link">Entrar</a>
+    <a href="#/atacado" class="account-link account-link-accent">${icon('store', 'icon icon-sm')} Comprar no Atacado</a>
+  </div>`;
+}
+
+function renderMobileAccountLinks(user) {
+  const linkStyle = 'padding:14px 0;border-bottom:1px solid var(--color-border-soft);font-size:15px;display:block;';
+  if (user) {
+    const firstName = escapeHtml((user.fullName || 'Cliente').split(' ')[0]);
+    return `
+    <div style="padding:0 20px;">
+      <p style="padding:14px 0;border-bottom:1px solid var(--color-border-soft);font-size:13px;color:var(--color-text-soft);">Olá, ${firstName} · <span class="account-menu-tag" style="margin-left:4px;">Cliente Atacadista</span></p>
+      <a href="#/minha-conta" data-nav-link style="${linkStyle}">Minha Conta</a>
+      <a href="#/minha-conta?aba=pedidos" data-nav-link style="${linkStyle}">Meus Pedidos</a>
+      <button type="button" id="mobile-logout-btn" class="btn-link" style="padding:14px 0;font-size:15px;">Sair da conta</button>
+    </div>`;
+  }
+  return `
+  <div style="padding:0 20px;">
+    <a href="#/login" data-nav-link style="${linkStyle}">Entrar</a>
+    <a href="#/atacado" data-nav-link style="${linkStyle}">Comprar no Atacado</a>
+  </div>`;
 }
 
 export function bindHeaderEvents() {
@@ -96,7 +140,64 @@ export function bindHeaderEvents() {
 
   document.getElementById('cart-btn')?.addEventListener('click', openCartDrawer);
 
+  bindAccountAreaEvents();
   updateActiveNav();
+}
+
+function bindAccountAreaEvents() {
+  const hamburger = document.getElementById('hamburger-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+
+  const trigger = document.getElementById('account-trigger');
+  const menu = document.getElementById('account-menu');
+  trigger?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = menu.hidden;
+    menu.hidden = !isOpen;
+    trigger.setAttribute('aria-expanded', String(isOpen));
+  });
+  menu?.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => { menu.hidden = true; trigger?.setAttribute('aria-expanded', 'false'); });
+  });
+
+  document.getElementById('account-logout-btn')?.addEventListener('click', () => {
+    logout();
+    showToast('Você saiu da sua conta.', 'info');
+    navigate('/');
+  });
+  document.getElementById('mobile-logout-btn')?.addEventListener('click', () => {
+    logout();
+    showToast('Você saiu da sua conta.', 'info');
+    hamburger?.classList.remove('open');
+    if (mobileMenu) mobileMenu.hidden = true;
+    navigate('/');
+  });
+
+  document.querySelectorAll('#mobile-account-links [data-nav-link]').forEach((link) => {
+    link.addEventListener('click', () => {
+      hamburger?.classList.remove('open');
+      if (mobileMenu) mobileMenu.hidden = true;
+    });
+  });
+}
+
+document.addEventListener('click', (e) => {
+  const widget = document.querySelector('.account-widget');
+  const menu = document.getElementById('account-menu');
+  if (!menu || menu.hidden) return;
+  if (widget && !widget.contains(e.target)) {
+    menu.hidden = true;
+    document.getElementById('account-trigger')?.setAttribute('aria-expanded', 'false');
+  }
+});
+
+function refreshAccountArea() {
+  const user = getCurrentUser();
+  const headerAccount = document.getElementById('header-account');
+  const mobileAccountLinks = document.getElementById('mobile-account-links');
+  if (headerAccount) headerAccount.innerHTML = renderAccountArea(user);
+  if (mobileAccountLinks) mobileAccountLinks.innerHTML = renderMobileAccountLinks(user);
+  bindAccountAreaEvents();
 }
 
 export function updateActiveNav() {
@@ -129,13 +230,8 @@ export function updateHeaderBadges() {
     favBadge.textContent = String(count);
     favBadge.hidden = count === 0;
   }
-  const accountBtn = document.getElementById('account-btn');
-  if (accountBtn) {
-    const user = getCurrentUser();
-    accountBtn.setAttribute('title', user ? user.name : 'Entrar');
-  }
 }
 
 window.addEventListener('cart:change', updateHeaderBadges);
 window.addEventListener('favorites:change', updateHeaderBadges);
-window.addEventListener('auth:change', updateHeaderBadges);
+window.addEventListener('auth:change', refreshAccountArea);

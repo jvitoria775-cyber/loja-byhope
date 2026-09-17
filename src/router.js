@@ -7,6 +7,8 @@ import * as checkout from './pages/checkout.js';
 import * as success from './pages/success.js';
 import * as login from './pages/login.js';
 import * as register from './pages/register.js';
+import * as account from './pages/account.js';
+import * as wholesale from './pages/wholesale.js';
 import * as about from './pages/about.js';
 import * as contact from './pages/contact.js';
 import * as staticPage from './pages/staticPage.js';
@@ -22,7 +24,10 @@ const routes = [
   { path: /^\/checkout$/, page: checkout },
   { path: /^\/pedido\/([\w-]+)$/, page: success },
   { path: /^\/login$/, page: login },
+  { path: /^\/redefinir-senha$/, page: login },
   { path: /^\/cadastro$/, page: register },
+  { path: /^\/atacado$/, page: wholesale },
+  { path: /^\/minha-conta$/, page: account },
   { path: /^\/sobre$/, page: about },
   { path: /^\/contato$/, page: contact },
   { path: /^\/(politica-privacidade|termos-uso|trocas-devolucoes|frete-entrega)$/, page: staticPage },

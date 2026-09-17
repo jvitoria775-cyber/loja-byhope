@@ -23,7 +23,9 @@ export function renderProductCard(p, color, delayIndex = 0) {
           <div class="media-fallback"><span>GT</span></div>
         </div>
       </a>
-      ${p.oldPrice ? `<div class="product-badges"><span class="tag-badge sale">-${calcDiscountPercent(p.price, p.oldPrice)}%</span></div>` : ''}
+      ${p.wholesalePrice
+        ? `<div class="product-badges"><span class="tag-badge sale">atacado</span></div>`
+        : p.oldPrice ? `<div class="product-badges"><span class="tag-badge sale">-${calcDiscountPercent(p.price, p.oldPrice)}%</span></div>` : ''}
       <button class="fav-toggle ${fav ? 'active' : ''}" data-fav-btn="${p.id}" aria-pressed="${fav}" aria-label="${fav ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}">
         ${icon('heart')}
       </button>
@@ -37,8 +39,10 @@ export function renderProductCard(p, color, delayIndex = 0) {
       <span class="product-cat">${escapeHtml(p.categoryLabel)}</span>
       <h3 class="product-name"><a href="#/produto/${p.slug}?cor=${color.slug}">${escapeHtml(p.name)}</a></h3>
       <div class="product-price-row">
-        <span class="price-current">${formatBRL(p.price)}</span>
-        ${p.oldPrice ? `<span class="price-old">${formatBRL(p.oldPrice)}</span><span class="price-discount">-${calcDiscountPercent(p.price, p.oldPrice)}%</span>` : ''}
+        <span class="price-current">${formatBRL(p.wholesalePrice || p.price)}</span>
+        ${p.wholesalePrice
+          ? `<span class="price-old">${formatBRL(p.price)}</span>`
+          : p.oldPrice ? `<span class="price-old">${formatBRL(p.oldPrice)}</span><span class="price-discount">-${calcDiscountPercent(p.price, p.oldPrice)}%</span>` : ''}
       </div>
       <div class="product-color-name"><span class="color-swatch-mini" style="background:${color.hex}"></span>${escapeHtml(color.name)}</div>
     </div>

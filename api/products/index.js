@@ -1,10 +1,17 @@
 import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
-import { requireAuth } from '../_auth.js';
+import { requireAuth, getPricingContext } from '../_auth.js';
 
 // GET: devolve os ajustes de estoque/preço/promoção (product_overrides) e
 // os produtos de demonstração (mock_products). PÚBLICO de propósito - a
 // loja, o PDV e o painel leem daqui para saber o preço/estoque atual de
 // cada produto; nada aqui é dado sensível.
+//
+// wholesaleTiers (preço de atacado) é a ÚNICA parte que NÃO é pública: só
+// entra na resposta se quem pediu for o painel administrativo OU um
+// cliente atacadista autenticado (getPricingContext checa os dois tipos de
+// token sem exigir nenhum). Sem token válido, o campo simplesmente não
+// existe na resposta - não é só escondido no front, o servidor nunca
+// manda esse dado pra quem não tem direito.
 // POST: cria um produto de demonstração (protegido).
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
@@ -14,9 +21,16 @@ export default async function handler(req, res) {
       sql`SELECT product_id, data FROM product_overrides`,
       sql`SELECT data FROM mock_products ORDER BY created_at ASC`,
     ]);
+    const { isAdmin, customerId } = getPricingContext(req);
+    const canSeeWholesale = isAdmin || !!customerId;
+
     const overrides = {};
-    overridesResult.rows.forEach((row) => { overrides[row.product_id] = row.data; });
-    return sendJson(res, 200, { overrides, mockProducts: mockResult.rows.map((r) => r.data) });
+    overridesResult.rows.forEach((row) => {
+      overrides[row.product_id] = canSeeWholesale ? row.data : stripWholesale(row.data);
+    });
+
+    const mockProducts = mockResult.rows.map((r) => (canSeeWholesale ? r.data : stripWholesale(r.data)));
+    return sendJson(res, 200, { overrides, mockProducts });
   }
 
   if (req.method === 'POST') {
@@ -52,4 +66,10 @@ export default async function handler(req, res) {
   }
 
   return sendJson(res, 405, { error: 'Método não permitido.' });
+}
+
+function stripWholesale(data) {
+  if (!data || !data.wholesaleTiers) return data;
+  const { wholesaleTiers, ...rest } = data;
+  return rest;
 }

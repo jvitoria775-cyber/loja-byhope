@@ -144,6 +144,25 @@ p { margin: 0; }
 }
 .badge[hidden] { display: none; }
 
+/* ---------- Área de conta (cliente atacadista) ---------- */
+.header-account { display: flex; align-items: center; }
+.account-widget { position: relative; display: flex; align-items: center; }
+.account-link { font-size: 13px; font-weight: 600; color: var(--color-text-soft); padding: 8px 10px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.account-link:hover { color: var(--color-primary); }
+.account-link-accent { background: var(--color-primary); color: #fff; border-radius: var(--radius-pill); padding: 9px 16px; }
+.account-link-accent:hover { background: var(--color-primary-hover); color: #fff; }
+.account-trigger { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; padding: 8px 10px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; color: var(--color-text); transition: background 0.2s; white-space: nowrap; }
+.account-trigger:hover { background: var(--color-bg-alt); }
+.account-menu {
+  position: absolute; top: calc(100% + 8px); right: 0; min-width: 210px; background: #fff;
+  border: 1px solid var(--color-border-soft); border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  padding: 8px; z-index: 70; display: flex; flex-direction: column; gap: 2px;
+}
+.account-menu[hidden] { display: none; }
+.account-menu a, .account-menu button { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; font-size: 13.5px; color: var(--color-text); background: none; border: none; }
+.account-menu a:hover, .account-menu button:hover { background: var(--color-bg-alt); }
+.account-menu-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; color: var(--color-accent-dark); background: var(--color-accent-soft); border-radius: var(--radius-pill); padding: 5px 10px; margin: 2px 4px 8px; }
+
 .hamburger { display: none; width: 40px; height: 40px; border: none; background: none; flex-direction: column; justify-content: center; gap: 5px; align-items: flex-end; }
 .hamburger span { display: block; height: 2px; background: var(--color-primary); border-radius: 2px; transition: all 0.25s var(--ease); }
 .hamburger span:nth-child(1) { width: 22px; }
@@ -366,6 +385,8 @@ p { margin: 0; }
 .pd-price-old { font-size: 15px; color: var(--color-text-faint); text-decoration: line-through; margin-left: 10px; }
 .pd-discount { display: inline-block; margin-left: 10px; background: var(--color-success-bg); color: var(--color-success); font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: var(--radius-pill); }
 .pd-installments { color: var(--color-text-soft); font-size: 13.5px; margin-top: 6px; }
+.wholesale-cta { margin-top: 14px; background: var(--color-bg-alt); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; color: var(--color-text-soft); }
+.wholesale-cta a { color: var(--color-accent-dark); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .pd-desc { color: var(--color-text-soft); margin-bottom: 24px; line-height: 1.8; font-size: 14.8px; }
 
 .option-block { margin-bottom: 24px; }
@@ -478,12 +499,28 @@ p { margin: 0; }
 
 /* ---------- Auth pages ---------- */
 .auth-page { max-width: 440px; margin: 60px auto 120px; padding: 0 20px; }
+.auth-page.auth-page-wide { max-width: 720px; }
 .auth-card { background: #fff; border: 1px solid var(--color-border-soft); border-radius: var(--radius-lg); padding: 40px 36px; }
 .auth-card h1 { font-size: 26px; margin-bottom: 6px; text-align: center; }
 .auth-card .section-sub { text-align: center; margin: 0 auto 26px; }
 .auth-switch { text-align: center; margin-top: 20px; font-size: 13.8px; color: var(--color-text-soft); }
 .auth-divider { display: flex; align-items: center; gap: 12px; margin: 22px 0; color: var(--color-text-faint); font-size: 12.5px; }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--color-border-soft); }
+
+.doc-type-toggle { display: flex; gap: 10px; margin-bottom: 20px; }
+.doc-type-toggle button {
+  flex: 1; padding: 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  background: #fff; font-size: 13.5px; font-weight: 600; color: var(--color-text-soft); transition: all 0.2s;
+}
+.doc-type-toggle button.active { border-color: var(--color-primary); background: var(--color-primary); color: #fff; }
+
+.wholesale-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  color: var(--color-accent-dark); background: var(--color-accent-soft); border-radius: var(--radius-pill); padding: 6px 12px;
+}
+
+.form-section-title { font-size: 13px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--color-text-soft); margin: 24px 0 14px; }
+.form-section-title:first-child { margin-top: 0; }
 
 /* ---------- Checkout ---------- */
 .checkout-layout { display: grid; grid-template-columns: 1fr 380px; gap: 48px; padding-bottom: 100px; align-items: start; }
@@ -581,6 +618,7 @@ p { margin: 0; }
 @media (max-width: 900px) {
   .nav { display: none; }
   .search-form { display: none; }
+  .header-account { display: none; }
   .hamburger { display: flex; }
   .header-main { gap: 14px; }
   .hero .container { grid-template-columns: 1fr; gap: 34px; }

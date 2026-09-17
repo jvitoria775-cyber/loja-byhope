@@ -7,7 +7,10 @@ const DEFAULT_DISCOUNT = 27;
 // GET: dados da loja, desconto geral e lista de produtos ocultos do painel.
 // PÚBLICO de propósito - o desconto geral é usado pela loja/PDV para
 // qualquer visitante calcular o preço exibido. Nunca devolve o hash do PIN.
-// PUT: atualiza dados da loja e/ou o desconto geral (protegido).
+// PUT: atualiza dados da loja e/ou o desconto geral (protegido). Também
+// cobre a semeadura/limpeza de pedidos de demonstração via
+// { action: 'seed-demo' | 'clear-demo' } - antes era api/demo.js, fundido
+// aqui pra caber no limite de funções serverless do plano gratuito.
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
@@ -23,8 +26,12 @@ export default async function handler(req, res) {
 
   if (req.method === 'PUT') {
     if (!requireAuth(req, res)) return;
-    const { storeInfo, discountPercent } = readJsonBody(req);
+    const body = readJsonBody(req);
 
+    if (body.action === 'seed-demo') return handleSeedDemo(res, body);
+    if (body.action === 'clear-demo') return handleClearDemo(res);
+
+    const { storeInfo, discountPercent } = body;
     if (storeInfo) {
       await sql`
         INSERT INTO settings (key, value) VALUES ('store_info', ${JSON.stringify(storeInfo)}::jsonb)
@@ -42,4 +49,28 @@ export default async function handler(req, res) {
   }
 
   return sendJson(res, 405, { error: 'Método não permitido.' });
+}
+
+async function handleSeedDemo(res, body) {
+  const { orders } = body;
+  if (!Array.isArray(orders) || !orders.length) {
+    return sendJson(res, 400, { error: 'Nenhum pedido de demonstração informado.' });
+  }
+  for (const order of orders) {
+    await sql`
+      INSERT INTO orders (id, data, channel, status, fulfillment_status, customer_email, is_demo)
+      VALUES (
+        ${order.id}, ${JSON.stringify(order)}::jsonb, ${order.channel || 'online'},
+        ${order.payment?.status || 'pendente'}, ${order.fulfillmentStatus || 'pendente'},
+        ${(order.customer?.email || '').toLowerCase()}, TRUE
+      )
+      ON CONFLICT (id) DO NOTHING
+    `;
+  }
+  return sendJson(res, 201, { ok: true, count: orders.length });
+}
+
+async function handleClearDemo(res) {
+  await sql`DELETE FROM orders WHERE is_demo = TRUE`;
+  return sendJson(res, 200, { ok: true });
 }
