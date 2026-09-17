@@ -71,7 +71,7 @@ export function getOAuthAuthorizeUrl(redirectUri) {
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', 'shipping-calculate shipping-cart shipping-checkout shipping-generate shipping-print shipping-companies');
+  url.searchParams.set('scope', 'cart-write shipping-calculate shipping-checkout shipping-generate shipping-print shipping-companies');
   return url.toString();
 }
 

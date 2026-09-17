@@ -38,6 +38,18 @@ async function handleOAuth(req, res) {
   const code = params.get('code');
   const redirectUri = redirectUriFor(req);
 
+  // O Melhor Envio pode voltar com "error" em vez de "code" (ex.: usuário
+  // cancelou, escopo inválido). Precisa tratar isso ANTES de cair no "sem
+  // code" abaixo - senão viraria um loop infinito de redirecionamento
+  // entre os dois servidores (nós mandando pra lá de novo, eles voltando
+  // com o mesmo erro de novo).
+  const oauthError = params.get('error');
+  if (oauthError) {
+    const description = params.get('error_description') || oauthError;
+    res.writeHead(302, { Location: `/admin.html#configuracoes?melhor_envio=erro&msg=${encodeURIComponent(description)}` });
+    return res.end();
+  }
+
   if (!code) {
     try {
       res.writeHead(302, { Location: getOAuthAuthorizeUrl(redirectUri) });
