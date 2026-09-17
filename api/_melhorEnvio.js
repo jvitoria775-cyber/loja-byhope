@@ -142,12 +142,14 @@ export async function calculateShipping({ fromCep, toCep, totalWeightKg, package
     body: {
       from: { postal_code: onlyDigits(fromCep) },
       to: { postal_code: onlyDigits(toCep) },
-      volumes: [{
+      products: [{
+        id: '1',
         width: Math.max(1, Math.round(packageDims.width)),
         height: Math.max(1, Math.round(packageDims.height)),
         length: Math.max(1, Math.round(packageDims.length)),
         weight: Math.max(0.01, totalWeightKg),
         insurance_value: Number(insuranceValue) || 0,
+        quantity: 1,
       }],
     },
   });
