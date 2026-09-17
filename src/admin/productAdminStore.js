@@ -7,7 +7,7 @@
 import { products as realProducts } from '../data/products.js';
 import { getCatalogProducts } from '../services/catalogService.js';
 import { getHiddenProductIds, invalidateSettingsCache } from './settingsStore.js';
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from './apiClient.js';
+import { apiGet, apiPost, apiPut, apiDelete } from './apiClient.js';
 
 // Custos reais por categoria, conforme o arquivo CUSTO.txt oficial da
 // empresa (ver README - "Origem dos dados"): custo do produto + custo fixo
@@ -176,6 +176,6 @@ export async function deleteMockProduct(id) {
 // (isso exigiria alterar o código-fonte da loja). "Excluir" um produto
 // oficial apenas o esconde da listagem do painel administrativo.
 export async function hideOfficialProduct(id) {
-  await apiPatch(`/products/${id}/hide`, {});
+  await apiPut(`/products/${id}?action=hide`, {});
   invalidateSettingsCache();
 }

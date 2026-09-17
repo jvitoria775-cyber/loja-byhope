@@ -40,7 +40,7 @@ export async function render(params, query = {}) {
 
   if (captureMethod || transactionNsu) {
     try {
-      const res = await fetch(`/api/orders/${id}/confirm-payment`, {
+      const res = await fetch(`/api/orders/${id}?action=confirm-payment`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ captureMethod, transactionNsu, receiptUrl }),

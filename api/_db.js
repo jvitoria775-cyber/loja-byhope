@@ -51,3 +51,11 @@ export function getPathSegments(req, resourceName) {
   if (resIdx !== -1) return parts.slice(resIdx + 1).map((s) => decodeURIComponent(s));
   return parts.map((s) => decodeURIComponent(s));
 }
+
+// Lê um parâmetro de query string direto de req.url (mesmo motivo do
+// getPathSegments acima - não confiar em req.query nesse ambiente).
+export function getQueryParam(req, name) {
+  const [, search] = (req.url || '').split('?');
+  if (!search) return null;
+  return new URLSearchParams(search).get(name);
+}
