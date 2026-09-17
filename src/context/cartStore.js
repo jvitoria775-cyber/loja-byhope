@@ -30,6 +30,7 @@ export function addItem(product, size, color, qty = 1) {
       id: product.id,
       slug: product.slug,
       name: product.name,
+      category: product.category,
       price: product.price,
       image: product.images[0]?.src,
       size,

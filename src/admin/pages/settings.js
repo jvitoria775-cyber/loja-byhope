@@ -1,7 +1,10 @@
 import { changePin } from '../adminAuth.js';
 import { seedDemoData, clearDemoData, hasDemoOrders } from '../mockData.js';
 import { getAllOrders } from '../orderStore.js';
-import { getStoreSettings, saveStoreSettings, getStoreDiscountPercent, setStoreDiscountPercent } from '../settingsStore.js';
+import {
+  getStoreSettings, saveStoreSettings, getStoreDiscountPercent, setStoreDiscountPercent,
+  getShippingConfig, saveShippingConfig, getMelhorEnvioStatus,
+} from '../settingsStore.js';
 import { setStockForAllProducts } from '../productAdminStore.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
@@ -11,8 +14,19 @@ function maskHandle(handle) {
   return handle[0] + '•'.repeat(Math.max(handle.length - 2, 1)) + handle[handle.length - 1];
 }
 
+const CATEGORY_LABELS = {
+  camiseta: 'Camisetas', babylook: 'Baby Look', cropped: 'Cropped',
+  regata: 'Regata', moletom: 'Moletom', short: 'Shorts',
+};
+const DEFAULT_CATEGORY_WEIGHTS_KG = {
+  camiseta: 0.2, babylook: 0.15, cropped: 0.15, regata: 0.15, moletom: 0.6, short: 0.25,
+};
+const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+
 export async function render() {
-  const [store, discountPercent, orders] = await Promise.all([getStoreSettings(), getStoreDiscountPercent(), getAllOrders()]);
+  const [store, discountPercent, orders, shippingConfig, melhorEnvio] = await Promise.all([
+    getStoreSettings(), getStoreDiscountPercent(), getAllOrders(), getShippingConfig(), getMelhorEnvioStatus(),
+  ]);
   const seeded = hasDemoOrders(orders);
 
   return `
@@ -29,12 +43,22 @@ export async function render() {
           </div>
           <div class="form-row">
             <label>CEP<input type="text" name="cep" value="${escapeHtml(store.cep)}" placeholder="00000-000"></label>
-            <label>Cidade/UF<input type="text" name="city" value="${escapeHtml(store.city)}" placeholder="Cidade"></label>
+            <label>Bairro<input type="text" name="district" value="${escapeHtml(store.district || '')}"></label>
           </div>
           <div class="form-row">
             <label>Rua<input type="text" name="street" value="${escapeHtml(store.street)}"></label>
             <label>Número<input type="text" name="number" value="${escapeHtml(store.number)}"></label>
           </div>
+          <div class="form-row">
+            <label>Cidade<input type="text" name="city" value="${escapeHtml(store.city)}" placeholder="Cidade"></label>
+            <label>Estado (UF)
+              <select name="state">
+                <option value="">Selecione</option>
+                ${STATES.map((s) => `<option value="${s}" ${store.state === s ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+          <p style="font-size:11px;color:var(--color-text-faint);">CEP, bairro, rua, número, cidade e UF completos são usados como endereço de origem para calcular e comprar o frete pelo Melhor Envio.</p>
           <button type="submit" class="btn btn-primary" style="margin-top:6px;">Salvar dados da loja</button>
           <span id="store-saved-note" class="form-hint" style="display:none;color:var(--color-accent-dark);">Dados salvos.</span>
         </form>
@@ -50,10 +74,44 @@ export async function render() {
           </div>
         </div>
         <div class="integration-row">
-          <div>${icon('truck', 'icon')}<div><strong>Melhor Envio</strong><span>Cotação e etiquetas de frete</span></div></div>
-          <span class="badge-pill badge-pendente">Não configurado</span>
+          <div>${icon('truck', 'icon')}<div><strong>Melhor Envio</strong><span>Cotação e etiquetas de frete (Correios)</span></div></div>
+          <div style="text-align:right;">
+            ${melhorEnvio.connected
+              ? `<span class="badge-pill badge-pago">Conectado${melhorEnvio.env === 'sandbox' ? ' (sandbox)' : ''}</span>`
+              : `<a href="/api/shipping" class="btn btn-outline btn-sm">Conectar Melhor Envio</a>`}
+          </div>
         </div>
-        <p style="font-size:11.5px;color:var(--color-text-faint);margin-top:14px;">A configuração do Melhor Envio (transportadoras, token de produção e CEP de origem) será feita em uma etapa futura, a pedido da equipe.</p>
+        ${melhorEnvio.connected ? `<p style="font-size:11.5px;color:var(--color-text-faint);margin-top:10px;">Conectado ${melhorEnvio.env === 'sandbox' ? 'em modo de testes (sandbox) — nenhuma etiqueta real é cobrada' : 'em produção'}. Para reconectar ou trocar de conta, clique em <a href="/api/shipping">Conectar Melhor Envio</a> novamente.</p>` : ''}
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <h2>Frete — caixa padrão</h2>
+        <p style="font-size:12.5px;color:var(--color-text-soft);margin-bottom:14px;">Dimensões da caixa/envelope padrão usada para calcular e comprar o frete. Vale para qualquer pedido, independente da quantidade de peças.</p>
+        <form id="package-form" class="admin-form">
+          <div class="form-row">
+            <label>Largura (cm)<input type="number" min="1" step="1" name="packageWidthCm" value="${shippingConfig.packageWidthCm}"></label>
+            <label>Altura (cm)<input type="number" min="1" step="1" name="packageHeightCm" value="${shippingConfig.packageHeightCm}"></label>
+          </div>
+          <label style="max-width:200px;">Comprimento (cm)<input type="number" min="1" step="1" name="packageLengthCm" value="${shippingConfig.packageLengthCm}"></label>
+          <button type="submit" class="btn btn-outline btn-sm" style="margin-top:6px;">Salvar caixa padrão</button>
+          <span id="package-saved-note" class="form-hint" style="display:none;color:var(--color-accent-dark);">Salvo.</span>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h2>Frete — peso por categoria</h2>
+        <p style="font-size:12.5px;color:var(--color-text-soft);margin-bottom:14px;">Peso aproximado de cada peça, usado para somar o peso total do pedido na cotação e na compra do frete.</p>
+        <form id="weights-form" class="admin-form">
+          <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
+            ${Object.keys(CATEGORY_LABELS).map((cat) => `
+              <label>${CATEGORY_LABELS[cat]} (kg)<input type="number" min="0" step="0.01" name="weight-${cat}" value="${shippingConfig.categoryWeights?.[cat] ?? DEFAULT_CATEGORY_WEIGHTS_KG[cat]}"></label>
+            `).join('')}
+          </div>
+          <button type="submit" class="btn btn-outline btn-sm" style="margin-top:6px;">Salvar pesos</button>
+          <span id="weights-saved-note" class="form-hint" style="display:none;color:var(--color-accent-dark);">Salvo.</span>
+        </form>
       </div>
     </div>
 
@@ -111,7 +169,15 @@ export async function render() {
   `;
 }
 
-export async function afterRender() {
+export async function afterRender(query = {}) {
+  if (query.melhor_envio === 'conectado') {
+    alert('Melhor Envio conectado com sucesso!');
+    location.hash = '#configuracoes';
+  } else if (query.melhor_envio === 'erro') {
+    alert(`Não foi possível conectar ao Melhor Envio: ${query.msg || 'erro desconhecido.'}`);
+    location.hash = '#configuracoes';
+  }
+
   document.getElementById('store-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target).entries());
@@ -120,6 +186,42 @@ export async function afterRender() {
     await saveStoreSettings(data);
     btn.disabled = false;
     const note = document.getElementById('store-saved-note');
+    note.style.display = 'inline';
+    setTimeout(() => { note.style.display = 'none'; }, 2500);
+  });
+
+  document.getElementById('package-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target).entries());
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    const current = await getShippingConfig();
+    await saveShippingConfig({
+      ...current,
+      packageWidthCm: Number(data.packageWidthCm) || current.packageWidthCm,
+      packageHeightCm: Number(data.packageHeightCm) || current.packageHeightCm,
+      packageLengthCm: Number(data.packageLengthCm) || current.packageLengthCm,
+    });
+    btn.disabled = false;
+    const note = document.getElementById('package-saved-note');
+    note.style.display = 'inline';
+    setTimeout(() => { note.style.display = 'none'; }, 2500);
+  });
+
+  document.getElementById('weights-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target).entries());
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    const current = await getShippingConfig();
+    const categoryWeights = { ...current.categoryWeights };
+    Object.keys(CATEGORY_LABELS).forEach((cat) => {
+      const value = Number(data[`weight-${cat}`]);
+      if (value > 0) categoryWeights[cat] = value;
+    });
+    await saveShippingConfig({ ...current, categoryWeights });
+    btn.disabled = false;
+    const note = document.getElementById('weights-saved-note');
     note.style.display = 'inline';
     setTimeout(() => { note.style.display = 'none'; }, 2500);
   });

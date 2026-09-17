@@ -1,5 +1,6 @@
 import { sql, handlePreflight, readJsonBody, sendJson, getIdFromUrl } from '../_db.js';
 import { requireAuth } from '../_auth.js';
+import { purchaseLabel, computeTotalWeightKg, DEFAULT_PACKAGE_DIMS } from '../_melhorEnvio.js';
 
 // GET: busca um pedido específico (público - usado pela página de
 // confirmação após o pagamento, o próprio cliente lendo o pedido dele).
@@ -32,6 +33,7 @@ export default async function handler(req, res) {
   if (req.method === 'PATCH') {
     const body = readJsonBody(req);
     if (body.action === 'confirm-payment') return handleConfirmPayment(res, id, body);
+    if (body.action === 'purchase-label') { if (!requireAuth(req, res)) return; return handlePurchaseLabelRequest(res, id); }
     return handleUpdate(req, res, id, body);
   }
 
@@ -63,6 +65,8 @@ async function handleUpdate(req, res, id, body) {
   }
   if (typeof trackingCode === 'string') order.trackingCode = trackingCode;
 
+  if (fulfillmentStatus === 'pago') await maybeAutoPurchaseLabel(order);
+
   await sql`
     UPDATE orders SET
       data = ${JSON.stringify(order)}::jsonb,
@@ -91,6 +95,8 @@ async function handleConfirmPayment(res, id, body) {
   order.statusHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [];
   order.statusHistory.push({ status: 'pago', date: new Date().toISOString() });
 
+  await maybeAutoPurchaseLabel(order);
+
   await sql`
     UPDATE orders SET
       data = ${JSON.stringify(order)}::jsonb,
@@ -99,5 +105,68 @@ async function handleConfirmPayment(res, id, body) {
       updated_at = now()
     WHERE id = ${id}
   `;
+  return sendJson(res, 200, { order });
+}
+
+// Compra e gera a etiqueta automaticamente assim que um pedido de entrega
+// (não retirada) é marcado como pago - dispara tanto quando o próprio
+// cliente confirma o pagamento (InfinitePay) quanto quando o painel marca
+// manualmente. Nunca lança erro pra fora: se falhar (saldo insuficiente,
+// CEP inválido etc.), só marca a etiqueta como "falhou" no pedido, sem
+// impedir a confirmação do pagamento em si - o lojista tenta de novo
+// manualmente depois (botão "Gerar etiqueta" no painel).
+async function maybeAutoPurchaseLabel(order) {
+  if (!order.shipping || order.shipping.type === 'retirada') return;
+  if (order.shipping.melhorEnvio) return;
+  if (!order.shipping.serviceId) return;
+
+  try {
+    const result = await runPurchaseLabel(order);
+    order.shipping.melhorEnvio = { ...result, status: 'gerada' };
+  } catch (err) {
+    order.shipping.melhorEnvio = { status: 'falhou', error: err.message };
+  }
+}
+
+async function runPurchaseLabel(order) {
+  const { rows } = await sql`SELECT key, value FROM settings WHERE key IN ('store_info', 'shipping_config')`;
+  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const storeInfo = map.store_info;
+  const shippingConfig = map.shipping_config || {};
+  if (!storeInfo?.cep) throw new Error('CEP de origem da loja não configurado (Configurações > Dados da loja).');
+
+  const totalWeightKg = computeTotalWeightKg(order.items, shippingConfig.categoryWeights);
+  const packageDims = {
+    width: shippingConfig.packageWidthCm || DEFAULT_PACKAGE_DIMS.width,
+    height: shippingConfig.packageHeightCm || DEFAULT_PACKAGE_DIMS.height,
+    length: shippingConfig.packageLengthCm || DEFAULT_PACKAGE_DIMS.length,
+  };
+  return purchaseLabel({ order, from: storeInfo, packageDims, totalWeightKg });
+}
+
+// PATCH { action: 'purchase-label' } - tentativa manual pelo painel
+// (cobre falha anterior ou pedido antigo). Protegida por PIN.
+async function handlePurchaseLabelRequest(res, id) {
+  const { rows } = await sql`SELECT data FROM orders WHERE id = ${id}`;
+  if (!rows.length) return sendJson(res, 404, { error: 'Pedido não encontrado.' });
+
+  const order = rows[0].data;
+  if (!order.shipping || order.shipping.type === 'retirada') {
+    return sendJson(res, 400, { error: 'Este pedido é retirada no balcão e não precisa de etiqueta.' });
+  }
+  if (!order.shipping.serviceId) {
+    return sendJson(res, 400, { error: 'Este pedido não tem um serviço dos Correios associado (foi feito antes da integração com o Melhor Envio).' });
+  }
+
+  try {
+    const result = await runPurchaseLabel(order);
+    order.shipping.melhorEnvio = { ...result, status: 'gerada' };
+  } catch (err) {
+    order.shipping.melhorEnvio = { status: 'falhou', error: err.message };
+    await sql`UPDATE orders SET data = ${JSON.stringify(order)}::jsonb, updated_at = now() WHERE id = ${id}`;
+    return sendJson(res, 502, { error: err.message, order });
+  }
+
+  await sql`UPDATE orders SET data = ${JSON.stringify(order)}::jsonb, updated_at = now() WHERE id = ${id}`;
   return sendJson(res, 200, { order });
 }

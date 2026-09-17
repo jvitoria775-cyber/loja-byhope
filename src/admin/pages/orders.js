@@ -1,4 +1,4 @@
-import { getAllOrders, updateFulfillmentStatus, updateTrackingCode, deleteOrder, FULFILLMENT_STEPS } from '../orderStore.js';
+import { getAllOrders, updateFulfillmentStatus, updateTrackingCode, deleteOrder, purchaseLabel, FULFILLMENT_STEPS } from '../orderStore.js';
 import { formatBRL, formatDate } from '../../utils/format.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
@@ -174,6 +174,19 @@ function openOrderModal(id) {
           </div>
         </div>
 
+        ${order.shipping && order.shipping.type !== 'retirada' ? `
+        <div style="margin-top:18px;">
+          <strong style="font-size:12.5px;">Etiqueta de envio (Melhor Envio)</strong>
+          <div style="margin-top:8px;">${labelStatusHtml(order)}</div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+            ${order.shipping.melhorEnvio?.status === 'gerada' && order.shipping.melhorEnvio.labelUrl
+              ? `<a href="${escapeHtml(order.shipping.melhorEnvio.labelUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">${icon('printer', 'icon icon-sm')} Abrir etiqueta (PDF 10x15)</a>`
+              : ''}
+            <button type="button" class="btn btn-outline btn-sm" id="purchase-label-btn">${icon('truck', 'icon icon-sm')} ${order.shipping.melhorEnvio?.status === 'gerada' ? 'Gerar novamente' : 'Gerar etiqueta'}</button>
+            <button type="button" class="btn btn-outline btn-sm" id="print-declaration-btn">${icon('fileText', 'icon icon-sm')} Declaração de conteúdo</button>
+          </div>
+        </div>` : ''}
+
         <div style="margin-top:18px;">
           <strong style="font-size:12.5px;">Status do pedido</strong>
           <div class="status-actions">
@@ -226,6 +239,23 @@ function openOrderModal(id) {
 
   document.getElementById('export-receipt-btn').addEventListener('click', () => exportReceipt(order));
 
+  document.getElementById('purchase-label-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Gerando etiqueta...';
+    try {
+      await purchaseLabel(order.id);
+      allOrders = await getAllOrders();
+      openOrderModal(order.id);
+    } catch (err) {
+      alert(err.message || 'Não foi possível gerar a etiqueta.');
+      allOrders = await getAllOrders();
+      openOrderModal(order.id);
+    }
+  });
+
+  document.getElementById('print-declaration-btn')?.addEventListener('click', () => exportDeclaration(order));
+
   document.getElementById('delete-order-btn').addEventListener('click', async () => {
     if (!confirm(`Remover o pedido #${order.id} definitivamente? Essa ação não pode ser desfeita.`)) return;
     await deleteOrder(order.id);
@@ -237,6 +267,15 @@ function openOrderModal(id) {
 
 function closeModal() {
   document.getElementById('order-modal-root').innerHTML = '';
+}
+
+function labelStatusHtml(order) {
+  const me = order.shipping?.melhorEnvio;
+  if (!me) return `<span class="badge-pill badge-pendente">Ainda não gerada</span>`;
+  if (me.status === 'gerada') {
+    return `<span class="badge-pill badge-pago">Gerada</span>${me.trackingCode ? ` <span style="color:var(--color-text-soft);font-size:12.5px;">rastreio: ${escapeHtml(me.trackingCode)}</span>` : ''}`;
+  }
+  return `<span class="badge-pill badge-cancelado">Falhou</span> <span style="color:var(--color-error);font-size:11.5px;">${escapeHtml(me.error || 'Erro desconhecido.')}</span>`;
 }
 
 // "Exportar comprovante" abre uma janela com um recibo formatado para
@@ -264,6 +303,51 @@ function exportReceipt(order) {
     <p>Pagamento: ${escapeHtml(PAYMENT_LABELS[order.payment?.method] || order.payment?.method || '—')} · Status: ${escapeHtml(order.fulfillmentStatus)}</p>
     <table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead><tbody>${itemsHtml}</tbody></table>
     <p class="total">Total: ${formatBRL(order.total)}</p>
+    <script>window.onload = () => window.print();</script>
+    </body></html>`);
+  win.document.close();
+}
+
+// Declaração de conteúdo, formato térmico 10x15 (mesmo tamanho da
+// etiqueta), pra colar junto na caixa e ajudar a separar as peças na hora
+// de embalar. Cada item aparece como NOME-COR-TAMANHO, a pedido da loja -
+// gerada por nós mesmos (não é a etiqueta em si, essa vem pronta do
+// Melhor Envio) pra garantir esse formato exato.
+function exportDeclaration(order) {
+  const win = window.open('', '_blank');
+  if (!win) return;
+  const itemsHtml = (order.items || []).map((i) => `
+    <tr><td>${escapeHtml(`${i.name}-${i.color}-${i.size}`)}</td><td>${i.qty}</td></tr>`).join('');
+  const toName = `${order.customer?.firstName || ''} ${order.customer?.lastName || ''}`.trim() || '—';
+  const addr = order.address || {};
+
+  win.document.write(`
+    <!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Declaração de conteúdo #${order.id}</title>
+    <style>
+      @page { size: 10cm 15cm; margin: 4mm; }
+      * { box-sizing: border-box; }
+      body { font-family: Arial, sans-serif; color: #1A1A1A; font-size: 10px; padding: 0; margin: 0; width: 10cm; }
+      h1 { font-size: 12px; margin: 0 0 4px; }
+      p { margin: 1px 0; font-size: 9.5px; }
+      .section { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #999; }
+      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+      th, td { text-align: left; padding: 2px 3px; border-bottom: 1px solid #ddd; font-size: 9px; }
+      .qty-col { width: 24px; text-align: right; }
+    </style></head><body>
+    <h1>Declaração de Conteúdo — Pedido #${order.id}</h1>
+    <p>${formatDate(order.date)}</p>
+    <div class="section">
+      <p><strong>Destinatário:</strong> ${escapeHtml(toName)}</p>
+      <p>${escapeHtml(addr.street || '')}, ${escapeHtml(addr.number || '')} ${addr.complement ? '- ' + escapeHtml(addr.complement) : ''}</p>
+      <p>${escapeHtml(addr.neighborhood || '')} — ${escapeHtml(addr.city || '')}/${escapeHtml(addr.state || '')}</p>
+      <p>CEP: ${escapeHtml(addr.cep || '')}</p>
+    </div>
+    <div class="section">
+      <table>
+        <thead><tr><th>Item (nome-cor-tamanho)</th><th class="qty-col">Qtd</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+    </div>
     <script>window.onload = () => window.print();</script>
     </body></html>`);
   win.document.close();

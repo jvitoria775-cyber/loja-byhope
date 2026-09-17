@@ -259,7 +259,7 @@ function addToCart(product, color, size, qty, image) {
   if (existing) {
     existing.qty += qty;
   } else {
-    cart.push({ productId: product.id, name: product.name, price, colorSlug: color.slug, colorName: color.name, size, qty, image });
+    cart.push({ productId: product.id, name: product.name, category: product.category, price, colorSlug: color.slug, colorName: color.name, size, qty, image });
   }
   renderCart();
   showToast(`${product.name} adicionado (${qty}x)`, 'success');
@@ -346,7 +346,7 @@ async function finishSale() {
     date: new Date().toISOString(),
     channel: 'pdv',
     customerType: wholesaleMode ? 'wholesale' : 'retail',
-    items: cart.map((i) => ({ id: i.productId, name: i.name, price: i.price, image: i.image, size: i.size, color: i.colorName, qty: i.qty })),
+    items: cart.map((i) => ({ id: i.productId, name: i.name, category: i.category, price: i.price, image: i.image, size: i.size, color: i.colorName, qty: i.qty })),
     customer: { firstName: name || 'Cliente balcão', lastName: '', email: '', phone },
     address: null,
     shipping: { type: 'retirada', label: 'Venda no balcão', price: 0, days: 0 },

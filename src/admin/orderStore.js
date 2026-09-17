@@ -69,6 +69,15 @@ export async function deleteOrder(id) {
   invalidateOrdersCache();
 }
 
+// Compra/gera a etiqueta pelo Melhor Envio manualmente - usado quando a
+// geração automática (ao marcar como pago) falhou, ou para um pedido
+// antigo que nunca tentou gerar etiqueta.
+export async function purchaseLabel(id) {
+  const { order } = await apiPatch(`/orders/${id}`, { action: 'purchase-label' });
+  invalidateOrdersCache();
+  return order;
+}
+
 export function generatePdvOrderId() {
   return `PDV${Date.now().toString().slice(-8)}`;
 }

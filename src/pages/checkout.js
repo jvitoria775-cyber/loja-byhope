@@ -1,6 +1,6 @@
 import { getItems, getSubtotal, getCoupon, clearCart } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
-import { simulateShipping, isValidCep } from '../services/shippingService.js';
+import { calculateShipping, isValidCep } from '../services/shippingService.js';
 import { createInfinitePayLink } from '../services/paymentService.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -145,12 +145,26 @@ export function afterRender() {
   if (!getItems().length) return;
 
   const cepInput = document.getElementById('f-cep');
-  cepInput?.addEventListener('blur', () => {
+  cepInput?.addEventListener('blur', async () => {
     if (!isValidCep(cepInput.value)) return;
-    const result = simulateShipping(cepInput.value);
-    shippingOptions = result.options;
     const el = document.getElementById('checkout-shipping-options');
-    el.innerHTML = result.options.map((opt) => `
+    el.innerHTML = `<p class="form-hint">Calculando frete pelos Correios...</p>`;
+
+    let result;
+    try {
+      result = await calculateShipping(cepInput.value, getItems());
+    } catch (err) {
+      el.innerHTML = `<p class="form-hint" style="color:var(--color-error);">${escapeHtml(err.message)}</p>`;
+      return;
+    }
+
+    shippingOptions = result.options;
+    if (!shippingOptions.length) {
+      el.innerHTML = `<p class="form-hint" style="color:var(--color-error);">${escapeHtml(result.error || 'Nenhuma opção de frete disponível para este CEP.')}</p>`;
+      return;
+    }
+
+    el.innerHTML = shippingOptions.map((opt) => `
       <label class="shipping-option" data-ship="${opt.type}">
         <span class="shipping-option-left">
           <input type="radio" name="shipping" ${selectedShipping?.type === opt.type ? 'checked' : ''} required />

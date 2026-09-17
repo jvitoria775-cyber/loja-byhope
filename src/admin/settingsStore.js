@@ -3,7 +3,8 @@
 // settings.js agora vem de /api/settings (banco compartilhado).
 import { apiGet, apiPut } from './apiClient.js';
 
-const DEFAULT_STORE_INFO = { name: '', cnpj: '', email: '', phone: '', cep: '', street: '', number: '', city: '', state: '' };
+const DEFAULT_STORE_INFO = { name: '', cnpj: '', email: '', phone: '', cep: '', street: '', number: '', district: '', city: '', state: '' };
+const DEFAULT_SHIPPING_CONFIG = { packageWidthCm: 25, packageHeightCm: 20, packageLengthCm: 5, categoryWeights: {} };
 
 let _cache = null;
 let _promise = null;
@@ -46,4 +47,19 @@ export async function setStoreDiscountPercent(percent) {
 export async function getHiddenProductIds() {
   const { hiddenProductIds } = await load();
   return hiddenProductIds || [];
+}
+
+export async function getShippingConfig() {
+  const { shippingConfig } = await load();
+  return { ...DEFAULT_SHIPPING_CONFIG, ...(shippingConfig || {}) };
+}
+
+export async function saveShippingConfig(shippingConfig) {
+  await apiPut('/settings', { shippingConfig });
+  invalidateSettingsCache();
+}
+
+export async function getMelhorEnvioStatus() {
+  const { melhorEnvio } = await load();
+  return melhorEnvio || { connected: false };
 }

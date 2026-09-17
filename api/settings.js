@@ -1,8 +1,10 @@
 import { sql, handlePreflight, readJsonBody, sendJson } from './_db.js';
 import { requireAuth } from './_auth.js';
+import { getConnectionStatus as getMelhorEnvioStatus } from './_melhorEnvio.js';
 
-const DEFAULT_STORE_INFO = { name: '', cnpj: '', email: '', phone: '', cep: '', street: '', number: '', city: '', state: '' };
+const DEFAULT_STORE_INFO = { name: '', cnpj: '', email: '', phone: '', cep: '', street: '', number: '', district: '', city: '', state: '' };
 const DEFAULT_DISCOUNT = 27;
+const DEFAULT_SHIPPING_CONFIG = { packageWidthCm: 25, packageHeightCm: 20, packageLengthCm: 5, categoryWeights: {} };
 
 // GET: dados da loja, desconto geral e lista de produtos ocultos do painel.
 // PÚBLICO de propósito - o desconto geral é usado pela loja/PDV para
@@ -15,12 +17,17 @@ export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
 
   if (req.method === 'GET') {
-    const { rows } = await sql`SELECT key, value FROM settings WHERE key IN ('store_info', 'store_discount_percent', 'hidden_products')`;
+    const [{ rows }, melhorEnvio] = await Promise.all([
+      sql`SELECT key, value FROM settings WHERE key IN ('store_info', 'store_discount_percent', 'hidden_products', 'shipping_config')`,
+      getMelhorEnvioStatus(),
+    ]);
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     return sendJson(res, 200, {
-      storeInfo: map.store_info || DEFAULT_STORE_INFO,
+      storeInfo: { ...DEFAULT_STORE_INFO, ...(map.store_info || {}) },
       discountPercent: map.store_discount_percent ?? DEFAULT_DISCOUNT,
       hiddenProductIds: map.hidden_products || [],
+      shippingConfig: { ...DEFAULT_SHIPPING_CONFIG, ...(map.shipping_config || {}) },
+      melhorEnvio,
     });
   }
 
@@ -31,10 +38,16 @@ export default async function handler(req, res) {
     if (body.action === 'seed-demo') return handleSeedDemo(res, body);
     if (body.action === 'clear-demo') return handleClearDemo(res);
 
-    const { storeInfo, discountPercent } = body;
+    const { storeInfo, discountPercent, shippingConfig } = body;
     if (storeInfo) {
       await sql`
         INSERT INTO settings (key, value) VALUES ('store_info', ${JSON.stringify(storeInfo)}::jsonb)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+      `;
+    }
+    if (shippingConfig) {
+      await sql`
+        INSERT INTO settings (key, value) VALUES ('shipping_config', ${JSON.stringify(shippingConfig)}::jsonb)
         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
       `;
     }

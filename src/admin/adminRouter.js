@@ -29,11 +29,13 @@ export function initAdminRouter() {
 
 function parseHash() {
   const raw = (location.hash.slice(1) || '').replace(/^\//, '');
-  return raw;
+  const [pathPart, queryPart] = raw.split('?');
+  const query = Object.fromEntries(new URLSearchParams(queryPart || ''));
+  return { path: pathPart || '', query };
 }
 
 async function render() {
-  const path = parseHash();
+  const { path, query } = parseHash();
   const match = routes.find((r) => r.path.test(path)) || routes[0];
 
   const root = document.getElementById('app-root');
@@ -42,8 +44,8 @@ async function render() {
 
   const contentEl = document.getElementById('page-content');
   try {
-    contentEl.innerHTML = await match.page.render();
-    await match.page.afterRender?.();
+    contentEl.innerHTML = await match.page.render(query);
+    await match.page.afterRender?.(query);
   } catch (err) {
     console.error('Erro ao renderizar página do painel:', err);
     contentEl.innerHTML = `<div class="empty-note"><strong>Ocorreu um erro ao carregar esta seção.</strong></div>`;

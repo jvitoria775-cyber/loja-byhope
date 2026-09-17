@@ -1,32 +1,24 @@
-function round2(n) {
-  return Math.round(n * 100) / 100;
-}
-
+// Cotação real de frete via Melhor Envio (só Correios: PAC e SEDEX, a
+// pedido da loja). O peso de cada item vem da categoria do produto (a
+// própria API resolve o peso/caixa padrão configurados em Configurações >
+// Frete) - o navegador só manda categoria + quantidade, nunca peso, pra
+// não depender de nenhum dado sensível a manipulação ficar só no cliente.
 export function isValidCep(cep) {
   return /^\d{5}-?\d{3}$/.test((cep || '').trim());
 }
 
-const REGIONS = {
-  0: 'São Paulo (Capital e região)', 1: 'São Paulo (Interior)', 2: 'Rio de Janeiro / Espírito Santo',
-  3: 'Minas Gerais', 4: 'Bahia / Sergipe', 5: 'Pernambuco / Alagoas / Paraíba / RN',
-  6: 'Ceará / Piauí / Maranhão / Norte', 7: 'Distrito Federal / Goiás / Centro-Oeste',
-  8: 'Paraná / Santa Catarina', 9: 'Rio Grande do Sul',
-};
-
-export function simulateShipping(cep) {
-  const clean = (cep || '').replace(/\D/g, '');
-  if (clean.length !== 8) return null;
-
-  const region = Number(clean[0]);
-  const baseEco = 14.9 + region * 1.9;
-  const baseExp = 27.9 + region * 2.6;
-  const days = { eco: 5 + (region % 4), exp: 2 + (region % 2) };
-
-  return {
-    region: REGIONS[region] || 'Brasil',
-    options: [
-      { type: 'economico', label: 'Frete Econômico', price: round2(baseEco), days: days.eco },
-      { type: 'expresso', label: 'Frete Expresso', price: round2(baseExp), days: days.exp },
-    ],
+export async function calculateShipping(cep, items) {
+  const payload = {
+    action: 'calculate',
+    toCep: cep,
+    items: items.map((i) => ({ category: i.category, qty: i.qty })),
   };
+  const res = await fetch('/api/shipping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Não foi possível calcular o frete. Tente novamente.');
+  return { options: data.options || [], error: data.error };
 }
