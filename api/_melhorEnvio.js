@@ -55,10 +55,12 @@ async function meFetch(path, { method = 'GET', body, token } = {}) {
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let data = {};
+  try { data = rawText ? JSON.parse(rawText) : {}; } catch { /* resposta não era JSON */ }
   if (!res.ok) {
-    const detail = data?.errors ? JSON.stringify(data.errors) : (data?.message || `Erro ${res.status} na API do Melhor Envio.`);
-    throw new Error(detail);
+    const detail = data?.errors ? JSON.stringify(data.errors) : (data?.message || rawText || `Erro ${res.status} na API do Melhor Envio.`);
+    throw new Error(`[${res.status}] ${detail}`.slice(0, 500));
   }
   return data;
 }
