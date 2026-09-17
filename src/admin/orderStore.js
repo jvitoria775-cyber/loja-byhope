@@ -2,7 +2,7 @@
 // localStorage (visível só no navegador que criou o pedido); agora lê e
 // grava no banco compartilhado via /api/orders, então qualquer pedido
 // feito pela loja ou pelo PDV, em qualquer aparelho, aparece aqui.
-import { apiGet, apiPost, apiPatch } from './apiClient.js';
+import { apiGet, apiPost, apiPatch, apiDelete } from './apiClient.js';
 
 // Etapas possíveis do ciclo de vida de um pedido, na ordem em que
 // normalmente acontecem. Usado tanto para os filtros rápidos quanto para
@@ -59,6 +59,14 @@ export async function updateTrackingCode(id, trackingCode) {
   const { order } = await apiPatch(`/orders/${id}`, { trackingCode });
   invalidateOrdersCache();
   return order;
+}
+
+// Remove o pedido definitivamente - usado pelo painel para apagar um
+// pedido de teste ou feito por engano. Não mexe em estoque (o estoque
+// nunca é descontado automaticamente pelo pedido).
+export async function deleteOrder(id) {
+  await apiDelete(`/orders/${id}`);
+  invalidateOrdersCache();
 }
 
 export function generatePdvOrderId() {

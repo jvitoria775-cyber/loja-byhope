@@ -9,6 +9,9 @@ import { requireAuth } from '../_auth.js';
 // como admin; só mexe nos campos de pagamento).
 // PATCH sem essa ação: atualiza status de separação/envio e código de
 // rastreio (protegido - só o painel administrativo).
+// DELETE: remove o pedido definitivamente (protegido - usado quando o
+// painel precisa apagar um pedido de teste/engano; não afeta estoque nem
+// nenhum outro dado, já que o pedido não desconta estoque automaticamente).
 //
 // A "ação" vai dentro do corpo (JSON), não na query string da URL - nesse
 // ambiente da Vercel (função Node "solta", sem Next.js), tanto os
@@ -30,6 +33,12 @@ export default async function handler(req, res) {
     const body = readJsonBody(req);
     if (body.action === 'confirm-payment') return handleConfirmPayment(res, id, body);
     return handleUpdate(req, res, id, body);
+  }
+
+  if (req.method === 'DELETE') {
+    if (!requireAuth(req, res)) return;
+    await sql`DELETE FROM orders WHERE id = ${id}`;
+    return sendJson(res, 200, { ok: true });
   }
 
   return sendJson(res, 405, { error: 'Método não permitido.' });

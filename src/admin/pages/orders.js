@@ -1,4 +1,4 @@
-import { getAllOrders, updateFulfillmentStatus, updateTrackingCode, FULFILLMENT_STEPS } from '../orderStore.js';
+import { getAllOrders, updateFulfillmentStatus, updateTrackingCode, deleteOrder, FULFILLMENT_STEPS } from '../orderStore.js';
 import { formatBRL, formatDate } from '../../utils/format.js';
 import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
@@ -193,6 +193,11 @@ function openOrderModal(id) {
         </div>
 
         <button type="button" class="btn btn-outline btn-block" id="export-receipt-btn" style="margin-top:18px;">${icon('printer', 'icon icon-sm')} Exportar comprovante</button>
+
+        <div style="margin-top:20px;border-top:1px solid var(--color-border);padding-top:16px;">
+          <button type="button" class="btn btn-outline btn-block" id="delete-order-btn" style="color:#B3261E;border-color:#B3261E;">${icon('trash', 'icon icon-sm')} Remover pedido</button>
+          <p style="font-size:11.5px;color:var(--color-text-faint);margin-top:6px;">Remove este pedido definitivamente do painel. Use para apagar pedidos de teste ou feitos por engano — não pode ser desfeito.</p>
+        </div>
       </div>
     </div>`;
 
@@ -220,6 +225,14 @@ function openOrderModal(id) {
   });
 
   document.getElementById('export-receipt-btn').addEventListener('click', () => exportReceipt(order));
+
+  document.getElementById('delete-order-btn').addEventListener('click', async () => {
+    if (!confirm(`Remover o pedido #${order.id} definitivamente? Essa ação não pode ser desfeita.`)) return;
+    await deleteOrder(order.id);
+    allOrders = await getAllOrders();
+    closeModal();
+    renderTable();
+  });
 }
 
 function closeModal() {
