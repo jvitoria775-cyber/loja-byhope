@@ -2,6 +2,7 @@ import { isUnlocked, renderGate, lock } from './adminAuth.js';
 import { getCatalogProducts } from '../services/catalogService.js';
 import { saveOrder, generatePdvOrderId } from './orderStore.js';
 import { createInfinitePayLink } from '../services/paymentService.js';
+import { apiGet } from './apiClient.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
@@ -15,6 +16,17 @@ let searchTerm = '';
 let paymentMethod = 'dinheiro';
 let manualDiscount = 0;
 
+// Venda presencial no PDV não tem cliente logado (é o funcionário quem
+// atende no balcão) - por isso o preço de atacado aqui não depende de
+// conta nenhuma, só desse interruptor manual. Enquanto ativo, todo produto
+// adicionado à venda usa o preço de atacado (tabela 1) em vez do varejo;
+// produtos sem preço de atacado cadastrado continuam no preço normal.
+let wholesaleMode = false;
+
+function effectivePrice(product) {
+  return (wholesaleMode && product.wholesalePrice) ? product.wholesalePrice : product.price;
+}
+
 function init() {
   if (isUnlocked()) {
     boot();
@@ -27,7 +39,19 @@ function init() {
 // abrir o PDV - busca/filtro depois disso são instantâneos, sem bater na
 // rede a cada tecla digitada.
 async function boot() {
-  allProducts = await getCatalogProducts();
+  // getCatalogProducts() é a mesma leitura pública usada pela loja, então
+  // nunca vem com preço de atacado (isso é o correto para a loja - aqui no
+  // PDV, autenticado como admin, buscamos os ajustes de novo com o token
+  // do painel só para pegar o wholesaleTiers de cada produto.
+  const [catalog, productsData] = await Promise.all([
+    getCatalogProducts(),
+    apiGet('/products'),
+  ]);
+  const overrides = productsData.overrides || {};
+  allProducts = catalog.map((p) => ({
+    ...p,
+    wholesalePrice: Number(overrides[p.id]?.wholesaleTiers?.tier1) > 0 ? Number(overrides[p.id].wholesaleTiers.tier1) : null,
+  }));
   CATEGORIES = [
     { key: '', label: 'Todas' },
     ...Array.from(allProducts.reduce((m, p) => m.set(p.category, p.categoryLabel), new Map()), ([value, label]) => ({ key: value, label })),
@@ -41,12 +65,14 @@ function render() {
     <div class="pdv-topbar">
       <div class="logo"><img src="/public/brand/logo-header.png" alt="Gratitude Têxtil" onerror="this.style.display='none'"></div>
       <nav>
+        <button type="button" id="wholesale-mode-btn" class="pdv-wholesale-btn ${wholesaleMode ? 'active' : ''}">${icon('store', 'icon icon-sm')} Modo atacado</button>
         <a href="/admin.html">${icon('package', 'icon icon-sm')} Pedidos</a>
         <a href="/" target="_blank" rel="noopener noreferrer">Ver loja</a>
         <button type="button" id="lock-btn">${icon('lock', 'icon icon-sm')} Sair</button>
       </nav>
     </div>
-    <div class="pdv-shell">
+    <div class="pdv-wholesale-banner" id="pdv-wholesale-banner" ${wholesaleMode ? '' : 'hidden'}>${icon('store', 'icon icon-sm')} Modo atacado ativo — os produtos adicionados agora usam o preço de atacado (tabela 1). Itens já na venda mantêm o preço com que foram adicionados.</div>
+    <div class="pdv-shell ${wholesaleMode ? 'has-banner' : ''}" id="pdv-shell">
       <section class="pdv-catalog">
         <div class="pdv-catalog-header">
           <h1 style="font-size:20px;">Venda no balcão</h1>
@@ -74,6 +100,7 @@ function render() {
   `;
 
   document.getElementById('lock-btn').addEventListener('click', () => { lock(); location.reload(); });
+  document.getElementById('wholesale-mode-btn').addEventListener('click', toggleWholesaleMode);
   document.getElementById('pdv-search').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); renderProductGrid(); });
   document.querySelectorAll('[data-cat]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -86,6 +113,18 @@ function render() {
 
   renderProductGrid();
   renderCart();
+}
+
+// Atualiza só o botão/faixa do modo atacado e os preços exibidos, sem
+// reconstruir a página inteira - um render() completo apagaria o nome/
+// telefone do cliente que o funcionário já tenha digitado no meio de uma
+// venda.
+function toggleWholesaleMode() {
+  wholesaleMode = !wholesaleMode;
+  document.getElementById('wholesale-mode-btn').classList.toggle('active', wholesaleMode);
+  document.getElementById('pdv-wholesale-banner').hidden = !wholesaleMode;
+  document.getElementById('pdv-shell').classList.toggle('has-banner', wholesaleMode);
+  renderProductGrid();
 }
 
 function renderProductGrid() {
@@ -101,14 +140,19 @@ function renderProductGrid() {
     return;
   }
 
-  grid.innerHTML = list.map((p) => `
+  grid.innerHTML = list.map((p) => {
+    const price = effectivePrice(p);
+    const showingWholesale = wholesaleMode && p.wholesalePrice;
+    return `
     <div class="pdv-product-card" data-product-id="${p.id}">
       <div class="media"><img src="${p.images[0].src}" alt="${escapeHtml(p.name)}" loading="lazy" onerror="this.style.opacity=0"></div>
       <div class="info">
         <strong>${escapeHtml(p.name)}</strong>
-        <span>${formatBRL(p.price)}${p.oldPrice ? ` <s style="color:var(--color-text-faint);">${formatBRL(p.oldPrice)}</s>` : ''} · ${p.colors.length} cor(es)</span>
+        <span>${formatBRL(price)}${showingWholesale ? ` <s style="color:var(--color-text-faint);">${formatBRL(p.price)}</s>` : (p.oldPrice ? ` <s style="color:var(--color-text-faint);">${formatBRL(p.oldPrice)}</s>` : '')} · ${p.colors.length} cor(es)</span>
+        ${wholesaleMode ? (p.wholesalePrice ? `<span class="pdv-wholesale-tag">atacado</span>` : `<span class="pdv-wholesale-tag off">sem atacado</span>`) : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   grid.querySelectorAll('[data-product-id]').forEach((card) => {
     card.addEventListener('click', () => openVariantModal(card.getAttribute('data-product-id')));
@@ -127,15 +171,18 @@ function openVariantModal(productId) {
 
   function paint() {
     const images = product.colorImages[selectedColor.slug] || product.images.map((i) => i.src);
+    const price = effectivePrice(product);
+    const showingWholesale = wholesaleMode && product.wholesalePrice;
     root.innerHTML = `
       <div class="modal-overlay" id="pdv-modal-overlay">
         <div class="modal-box">
           <button class="modal-close" id="pdv-modal-close">${icon('x')}</button>
+          ${showingWholesale ? `<span class="pdv-wholesale-tag" style="margin-bottom:10px;">${icon('store', 'icon icon-sm')} preço de atacado</span>` : ''}
           <div style="display:flex;gap:16px;margin-bottom:16px;">
             <img src="${images[0]}" alt="${escapeHtml(product.name)}" style="width:100px;height:124px;object-fit:cover;border-radius:8px;" onerror="this.style.visibility='hidden'">
             <div>
               <h2 style="font-size:17px;">${escapeHtml(product.name)}</h2>
-              <p style="color:var(--color-text-soft);font-size:13px;margin-top:4px;">${formatBRL(product.price)}${product.oldPrice ? ` <s style="color:var(--color-text-faint);">${formatBRL(product.oldPrice)}</s>` : ''}</p>
+              <p style="color:var(--color-text-soft);font-size:13px;margin-top:4px;">${formatBRL(price)}${showingWholesale ? ` <s style="color:var(--color-text-faint);">${formatBRL(product.price)}</s>` : (product.oldPrice ? ` <s style="color:var(--color-text-faint);">${formatBRL(product.oldPrice)}</s>` : '')}</p>
             </div>
           </div>
 
@@ -202,11 +249,17 @@ function closeModal() {
 }
 
 function addToCart(product, color, size, qty, image) {
-  const existing = cart.find((i) => i.productId === product.id && i.colorSlug === color.slug && i.size === size);
+  // O preço vai para o carrinho já resolvido (varejo ou atacado, conforme
+  // o modo no momento do clique) e nunca mais muda depois disso - mesma
+  // regra de "preço congelado" usada em todo o resto do sistema, para que
+  // ligar/desligar o modo atacado no meio da venda não altere itens que já
+  // estão na lista.
+  const price = effectivePrice(product);
+  const existing = cart.find((i) => i.productId === product.id && i.colorSlug === color.slug && i.size === size && i.price === price);
   if (existing) {
     existing.qty += qty;
   } else {
-    cart.push({ productId: product.id, name: product.name, price: product.price, colorSlug: color.slug, colorName: color.name, size, qty, image });
+    cart.push({ productId: product.id, name: product.name, price, colorSlug: color.slug, colorName: color.name, size, qty, image });
   }
   renderCart();
   showToast(`${product.name} adicionado (${qty}x)`, 'success');
@@ -292,6 +345,7 @@ async function finishSale() {
     id: generatePdvOrderId(),
     date: new Date().toISOString(),
     channel: 'pdv',
+    customerType: wholesaleMode ? 'wholesale' : 'retail',
     items: cart.map((i) => ({ id: i.productId, name: i.name, price: i.price, image: i.image, size: i.size, color: i.colorName, qty: i.qty })),
     customer: { firstName: name || 'Cliente balcão', lastName: '', email: '', phone },
     address: null,
@@ -366,6 +420,11 @@ function resetSale() {
   cart = [];
   manualDiscount = 0;
   paymentMethod = 'dinheiro';
+  // Volta pro padrão seguro (varejo) a cada venda nova - assim o
+  // funcionário precisa ativar de novo, de propósito, pro próximo cliente
+  // atacadista, em vez de arriscar esquecer ligado e vender no atacado pro
+  // cliente errado.
+  if (wholesaleMode) toggleWholesaleMode();
   document.getElementById('pdv-modal-root').innerHTML = '';
   document.getElementById('pdv-customer-name').value = '';
   document.getElementById('pdv-customer-phone').value = '';
