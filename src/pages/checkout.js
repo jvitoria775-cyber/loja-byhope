@@ -8,6 +8,7 @@ import { icon } from '../components/icons.js';
 import { showToast } from '../components/toast.js';
 import { getCurrentUser, getToken } from '../context/authStore.js';
 import { setItem, getItem } from '../utils/storage.js';
+import { isValidCpf, isValidCnpj, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
 
 let shippingOptions = [];
 let selectedShipping = getItem('shippingChoice', null);
@@ -54,7 +55,9 @@ export function render() {
               ${field('lastName', 'Sobrenome', 'text', user?.fullName?.split(' ').slice(1).join(' ') || '')}
               ${field('email', 'E-mail', 'email', user?.email || '', 'full')}
               ${field('phone', 'Telefone / WhatsApp', 'tel', user?.phone || '', 'full', '(11) 91234-5678')}
+              ${field('cpf', 'CPF', 'text', user?.docNumber ? (user.docType === 'cnpj' ? formatCnpj(user.docNumber) : formatCpf(user.docNumber)) : '', 'full', '000.000.000-00', true, 'Informe um CPF válido.')}
             </div>
+            <p class="form-hint">O CPF é exigido pelos Correios para a emissão da etiqueta de envio.</p>
           </div>
 
           <div class="checkout-section">
@@ -104,12 +107,12 @@ export function render() {
   </div>`;
 }
 
-function field(name, label, type, value = '', extraClass = '', placeholder = '', required = true) {
+function field(name, label, type, value = '', extraClass = '', placeholder = '', required = true, errorMsg = 'Este campo é obrigatório.') {
   return `
     <div class="form-field ${extraClass}" data-field="${name}">
       <label for="f-${name}">${label}</label>
       <input id="f-${name}" name="${name}" type="${type}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" ${required ? 'required' : ''} />
-      <span class="error-msg">Este campo é obrigatório.</span>
+      <span class="error-msg">${escapeHtml(errorMsg)}</span>
     </div>`;
 }
 
@@ -143,6 +146,11 @@ function renderTotals() {
 export function afterRender() {
   document.title = 'Checkout | GRATITUDE TÊXTIL';
   if (!getItems().length) return;
+
+  const cpfInput = document.getElementById('f-cpf');
+  cpfInput?.addEventListener('input', () => {
+    cpfInput.value = onlyDigits(cpfInput.value).length > 11 ? formatCnpj(cpfInput.value) : formatCpf(cpfInput.value);
+  });
 
   const cepInput = document.getElementById('f-cep');
   cepInput?.addEventListener('blur', async () => {
@@ -196,6 +204,15 @@ export function afterRender() {
     e.preventDefault();
     if (!validateForm(form)) {
       showToast('Verifique os campos destacados no formulário.', 'error');
+      return;
+    }
+    const cpfRaw = document.getElementById('f-cpf').value;
+    const cpfDigits = onlyDigits(cpfRaw);
+    const docOk = cpfDigits.length > 11 ? isValidCnpj(cpfDigits) : isValidCpf(cpfDigits);
+    if (!docOk) {
+      document.querySelector('[data-field="cpf"]').classList.add('invalid');
+      showToast('Informe um CPF válido — os Correios exigem esse dado para emitir a etiqueta de envio.', 'error');
+      document.getElementById('f-cpf').focus();
       return;
     }
     if (!selectedShipping) {
@@ -280,7 +297,7 @@ function buildOrder(data) {
     id,
     date: new Date().toISOString(),
     items,
-    customer: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone },
+    customer: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, document: onlyDigits(data.cpf) },
     address: { cep: data.cep, street: data.street, number: data.number, complement: data.complement, neighborhood: data.neighborhood, city: data.city, state: data.state },
     shipping: selectedShipping,
     payment: { method: 'infinitepay', status: 'aguardando confirmação' },

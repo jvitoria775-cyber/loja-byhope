@@ -196,6 +196,8 @@ export async function purchaseLabel({ order, from, packageDims, totalWeightKg })
       name: toName,
       phone: onlyDigits(order.customer?.phone),
       email: order.customer?.email || undefined,
+      document: onlyDigits(order.customer?.document).length === 11 ? onlyDigits(order.customer?.document) : undefined,
+      company_document: onlyDigits(order.customer?.document).length === 14 ? onlyDigits(order.customer?.document) : undefined,
       address: addr.street,
       number: addr.number,
       complement: addr.complement || undefined,
