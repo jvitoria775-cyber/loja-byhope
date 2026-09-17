@@ -5,6 +5,7 @@ const NAV_ITEMS = [
   { key: 'overview', href: '#', label: 'Visão Geral', iconName: 'trendingUp' },
   { key: 'pedidos', href: '#pedidos', label: 'Pedidos', iconName: 'package' },
   { key: 'clientes', href: '#clientes', label: 'Clientes', iconName: 'users' },
+  { key: 'atacadistas', href: '#atacadistas', label: 'Clientes Atacadistas', iconName: 'store' },
   { key: 'produtos', href: '#produtos', label: 'Produtos & Estoque', iconName: 'grid' },
   { key: 'financeiro', href: '#financeiro', label: 'Financeiro', iconName: 'dollarSign' },
   { key: 'configuracoes', href: '#configuracoes', label: 'Configurações', iconName: 'settings' },

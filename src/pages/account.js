@@ -46,7 +46,11 @@ export async function render(params, query = {}) {
   return `
   <div class="auth-page auth-page-wide">
     <div class="auth-card">
-      <div style="text-align:center;margin-bottom:14px;"><span class="wholesale-badge">${icon('store', 'icon icon-sm')} Cliente Atacadista</span></div>
+      <div style="text-align:center;margin-bottom:14px;">
+        ${customer.status !== 'inactive'
+          ? `<span class="wholesale-badge">${icon('store', 'icon icon-sm')} Cliente Atacadista</span>`
+          : `<span class="wholesale-badge" style="color:var(--color-text-soft);background:var(--color-bg-alt);">Conta cadastrada — preço de atacado desativado</span>`}
+      </div>
       <h1>Minha Conta</h1>
       <p class="section-sub">Olá, ${escapeHtml(customer.fullName)} · ${escapeHtml(customer.email)}</p>
 

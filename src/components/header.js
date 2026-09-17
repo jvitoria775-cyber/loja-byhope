@@ -72,7 +72,7 @@ function renderAccountArea(user) {
         ${icon('user', 'icon icon-sm')}<span>Olá, ${firstName}</span>${icon('chevronDown', 'icon icon-sm')}
       </button>
       <div class="account-menu" id="account-menu" hidden>
-        <span class="account-menu-tag">${icon('store', 'icon icon-sm')} Cliente Atacadista</span>
+        ${user.status !== 'inactive' ? `<span class="account-menu-tag">${icon('store', 'icon icon-sm')} Cliente Atacadista</span>` : ''}
         <a href="#/minha-conta" data-account-menu-link>Minha Conta</a>
         <a href="#/minha-conta?aba=pedidos" data-account-menu-link>Meus Pedidos</a>
         <button type="button" id="account-logout-btn">Sair da conta</button>
@@ -92,7 +92,7 @@ function renderMobileAccountLinks(user) {
     const firstName = escapeHtml((user.fullName || 'Cliente').split(' ')[0]);
     return `
     <div style="padding:0 20px;">
-      <p style="padding:14px 0;border-bottom:1px solid var(--color-border-soft);font-size:13px;color:var(--color-text-soft);">Olá, ${firstName} · <span class="account-menu-tag" style="margin-left:4px;">Cliente Atacadista</span></p>
+      <p style="padding:14px 0;border-bottom:1px solid var(--color-border-soft);font-size:13px;color:var(--color-text-soft);">Olá, ${firstName}${user.status !== 'inactive' ? ` · <span class="account-menu-tag" style="margin-left:4px;">Cliente Atacadista</span>` : ''}</p>
       <a href="#/minha-conta" data-nav-link style="${linkStyle}">Minha Conta</a>
       <a href="#/minha-conta?aba=pedidos" data-nav-link style="${linkStyle}">Meus Pedidos</a>
       <button type="button" id="mobile-logout-btn" class="btn-link" style="padding:14px 0;font-size:15px;">Sair da conta</button>

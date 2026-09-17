@@ -151,14 +151,27 @@ export function requireCustomerAuth(req, res) {
   return customerId;
 }
 
+// O painel pode desativar o atacado de um cliente específico (rebaixar
+// para varejo) sem bloquear a conta dele - ele continua entrando e vendo
+// os próprios pedidos, só deixa de desbloquear preço de atacado. Por isso
+// essa checagem é sempre feita contra o banco (nunca confiar só no que o
+// token diz), senão desativar alguém não faria efeito até o token expirar
+// (até 30 dias).
+export async function isCustomerWholesaleActive(customerId) {
+  if (!customerId) return false;
+  const { rows } = await sql`SELECT status FROM wholesale_customers WHERE id = ${customerId}`;
+  return rows.length > 0 && rows[0].status === 'active';
+}
+
 // Usado por rotas públicas que precisam decidir, sem exigir login
 // nenhum, se quem está perguntando tem direito a ver preço de atacado
-// (admin do painel OU cliente atacadista autenticado). Nunca lança 401 -
-// só informa o contexto pra quem chamou decidir o que devolver.
-export function getPricingContext(req) {
+// (admin do painel OU cliente atacadista autenticado E ativo). Nunca
+// lança 401 - só informa o contexto pra quem chamou decidir o que devolver.
+export async function getPricingContext(req) {
   const token = getBearerToken(req);
   if (verifyToken(token)) return { isAdmin: true, customerId: null };
   const customerId = verifyCustomerToken(token);
-  if (customerId) return { isAdmin: false, customerId };
-  return { isAdmin: false, customerId: null };
+  if (!customerId) return { isAdmin: false, customerId: null };
+  const active = await isCustomerWholesaleActive(customerId);
+  return { isAdmin: false, customerId: active ? customerId : null };
 }

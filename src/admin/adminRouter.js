@@ -1,6 +1,7 @@
 import * as overview from './pages/overview.js';
 import * as orders from './pages/orders.js';
 import * as customers from './pages/customers.js';
+import * as wholesaleCustomers from './pages/wholesaleCustomers.js';
 import * as productsPage from './pages/products.js';
 import * as finance from './pages/finance.js';
 import * as settings from './pages/settings.js';
@@ -10,6 +11,7 @@ const routes = [
   { path: /^$/, key: 'overview', title: 'Visão Geral', subtitle: 'Resumo do desempenho da loja.', page: overview },
   { path: /^pedidos$/, key: 'pedidos', title: 'Pedidos', subtitle: 'Gestão de vendas e pedidos.', page: orders },
   { path: /^clientes$/, key: 'clientes', title: 'Clientes', subtitle: 'Base de clientes (CRM).', page: customers },
+  { path: /^atacadistas$/, key: 'atacadistas', title: 'Clientes Atacadistas', subtitle: 'Contas de atacado: dados de cadastro e ativação do preço de atacado.', page: wholesaleCustomers },
   { path: /^produtos$/, key: 'produtos', title: 'Produtos & Estoque', subtitle: 'Catálogo e controle de estoque.', page: productsPage },
   { path: /^financeiro$/, key: 'financeiro', title: 'Financeiro & Relatórios', subtitle: 'Receitas, custos e lucro estimado.', page: finance },
   { path: /^configuracoes$/, key: 'configuracoes', title: 'Configurações', subtitle: 'Dados da loja, integrações e segurança.', page: settings },

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { sql, handlePreflight, readJsonBody, sendJson } from './_db.js';
-import { hashSecret, verifySecret, issueCustomerToken, requireCustomerAuth } from './_auth.js';
+import { hashSecret, verifySecret, issueCustomerToken, requireCustomerAuth, requireAuth } from './_auth.js';
 import { isValidEmail, isValidDoc, onlyDigits } from './_validators.js';
 import { sendEmail } from './_email.js';
 
@@ -12,6 +12,7 @@ const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
 // sobre o padrão "action no corpo").
 //
 // POST { action: 'register' | 'login' | 'forgot-password' | 'reset-password', ... } - público
+// POST { action: 'admin-list' | 'admin-update' | 'admin-set-status', ... } - painel (PIN)
 // GET  (Authorization: Bearer <token-do-cliente>) - devolve {customer, orders}
 // PUT  { action: 'update-profile' | 'change-password', ... } - autenticado
 export default async function handler(req, res) {
@@ -23,6 +24,9 @@ export default async function handler(req, res) {
     if (body.action === 'login') return handleLogin(res, body);
     if (body.action === 'forgot-password') return handleForgotPassword(req, res, body);
     if (body.action === 'reset-password') return handleResetPassword(res, body);
+    if (body.action === 'admin-list') { if (!requireAuth(req, res)) return; return handleAdminList(res); }
+    if (body.action === 'admin-update') { if (!requireAuth(req, res)) return; return handleAdminUpdate(res, body); }
+    if (body.action === 'admin-set-status') { if (!requireAuth(req, res)) return; return handleAdminSetStatus(res, body); }
     return sendJson(res, 400, { error: 'Ação inválida.' });
   }
 
@@ -49,6 +53,8 @@ function toPublicCustomer(row) {
     email: row.email,
     docType: row.doc_type,
     docNumber: row.doc_number,
+    status: row.status,
+    createdAt: row.created_at,
     ...row.data,
   };
 }
@@ -201,4 +207,90 @@ async function handleChangePassword(res, customerId, body) {
   const passwordHash = hashSecret(newPassword);
   await sql`UPDATE wholesale_customers SET password_hash = ${passwordHash}, updated_at = now() WHERE id = ${customerId}`;
   return sendJson(res, 200, { ok: true });
+}
+
+// Lista todos os clientes atacadistas para o painel, já com quantidade de
+// pedidos e total gasto (mesma ideia da tela de Clientes/CRM, mas aqui é a
+// conta real de login, não só um contato derivado de pedidos).
+async function handleAdminList(res) {
+  const { rows } = await sql`
+    SELECT wc.*, COALESCE(stats.order_count, 0)::int AS order_count, COALESCE(stats.total_spent, 0)::numeric AS total_spent
+    FROM wholesale_customers wc
+    LEFT JOIN (
+      SELECT customer_id, COUNT(*) AS order_count, SUM((data->>'total')::numeric) AS total_spent
+      FROM orders
+      WHERE customer_id IS NOT NULL
+      GROUP BY customer_id
+    ) stats ON stats.customer_id = wc.id
+    ORDER BY wc.created_at DESC
+  `;
+  const customers = rows.map((row) => ({
+    ...toPublicCustomer(row),
+    ordersCount: row.order_count,
+    totalSpent: Number(row.total_spent) || 0,
+  }));
+  return sendJson(res, 200, { customers });
+}
+
+// Edição administrativa dos dados de cadastro. Revalida tudo de novo no
+// servidor (mesma regra do cadastro) - nunca confia que o painel já
+// validou certo no navegador.
+async function handleAdminUpdate(res, body) {
+  const { id, docType, docNumber, fullName, storeName, phone, email, address } = body;
+  if (!id) return sendJson(res, 400, { error: 'Cliente não informado.' });
+
+  const { rows } = await sql`SELECT * FROM wholesale_customers WHERE id = ${id}`;
+  if (!rows.length) return sendJson(res, 404, { error: 'Cliente não encontrado.' });
+  const current = rows[0];
+
+  if (!fullName || !String(fullName).trim()) return sendJson(res, 400, { error: 'Informe o nome completo / razão social.' });
+  if (email !== undefined && !isValidEmail(email)) return sendJson(res, 400, { error: 'Informe um e-mail válido.' });
+
+  const nextDocType = docType || current.doc_type;
+  const nextDocNumber = docNumber !== undefined ? onlyDigits(docNumber) : current.doc_number;
+  if (docNumber !== undefined && !isValidDoc(nextDocType, nextDocNumber)) {
+    return sendJson(res, 400, { error: nextDocType === 'cpf' ? 'CPF inválido.' : 'CNPJ inválido.' });
+  }
+  const nextEmail = email !== undefined ? String(email).trim().toLowerCase() : current.email;
+
+  if (nextEmail !== current.email || nextDocNumber !== current.doc_number) {
+    const { rows: dupRows } = await sql`
+      SELECT id FROM wholesale_customers WHERE id <> ${id} AND (email = ${nextEmail} OR doc_number = ${nextDocNumber})
+    `;
+    if (dupRows.length) return sendJson(res, 409, { error: 'Já existe outra conta com este e-mail ou documento.' });
+  }
+
+  const nextData = {
+    ...current.data,
+    fullName: String(fullName).trim(),
+    storeName: storeName !== undefined ? String(storeName).trim() : current.data.storeName,
+    phone: phone !== undefined ? String(phone).trim() : current.data.phone,
+    address: address !== undefined ? { ...(current.data.address || {}), ...address } : current.data.address,
+  };
+
+  await sql`
+    UPDATE wholesale_customers SET
+      email = ${nextEmail}, doc_type = ${nextDocType}, doc_number = ${nextDocNumber},
+      data = ${JSON.stringify(nextData)}::jsonb, updated_at = now()
+    WHERE id = ${id}
+  `;
+  const { rows: freshRows } = await sql`SELECT * FROM wholesale_customers WHERE id = ${id}`;
+  return sendJson(res, 200, { customer: toPublicCustomer(freshRows[0]) });
+}
+
+// Ativa/desativa o atacado de um cliente específico - a conta continua
+// funcionando normalmente (login, "Minha Conta", pedidos), só deixa de
+// desbloquear preço de atacado enquanto estiver 'inactive'. É verificado
+// direto no banco a cada requisição (ver isCustomerWholesaleActive em
+// _auth.js), então o efeito é imediato, sem depender do token expirar.
+async function handleAdminSetStatus(res, body) {
+  const { id, status } = body;
+  if (status !== 'active' && status !== 'inactive') {
+    return sendJson(res, 400, { error: 'Status inválido.' });
+  }
+  const { rows } = await sql`
+    UPDATE wholesale_customers SET status = ${status}, updated_at = now() WHERE id = ${id} RETURNING *
+  `;
+  if (!rows.length) return sendJson(res, 404, { error: 'Cliente não encontrado.' });
+  return sendJson(res, 200, { customer: toPublicCustomer(rows[0]) });
 }

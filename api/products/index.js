@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       sql`SELECT product_id, data FROM product_overrides`,
       sql`SELECT data FROM mock_products ORDER BY created_at ASC`,
     ]);
-    const { isAdmin, customerId } = getPricingContext(req);
+    const { isAdmin, customerId } = await getPricingContext(req);
     const canSeeWholesale = isAdmin || !!customerId;
 
     const overrides = {};

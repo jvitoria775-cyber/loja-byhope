@@ -1,5 +1,5 @@
 import { sql, handlePreflight, readJsonBody, sendJson } from '../_db.js';
-import { requireAuth, verifyCustomerToken } from '../_auth.js';
+import { requireAuth, verifyCustomerToken, isCustomerWholesaleActive } from '../_auth.js';
 
 // GET: lista todos os pedidos (protegido - só o painel administrativo).
 // POST: cria um novo pedido (público - usado pelo checkout da loja e pelo
@@ -34,8 +34,14 @@ export default async function handler(req, res) {
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     const customerId = verifyCustomerToken(token);
     if (customerId) {
+      // customerId sempre é gravado (a conta é dona do pedido, aparece em
+      // "Meus pedidos" de qualquer forma), mas customerType só vira
+      // "wholesale" se o painel não tiver desativado o atacado dessa
+      // conta nesse meio-tempo - o preço já veio certo do carrinho (o
+      // servidor nunca manda wholesaleTiers pra quem está desativado), isso
+      // aqui é só pra etiqueta do pedido bater com a realidade.
       order.customerId = customerId;
-      order.customerType = 'wholesale';
+      order.customerType = (await isCustomerWholesaleActive(customerId)) ? 'wholesale' : 'retail';
     }
 
     await sql`
