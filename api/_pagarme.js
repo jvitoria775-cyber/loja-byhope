@@ -5,8 +5,11 @@
 // credenciais sempre lidas de process.env dentro das funções.
 import crypto from 'node:crypto';
 
-const ENV = (process.env.PAGARME_ENV || 'test').toLowerCase();
-const BASE_URL = ENV === 'production' ? 'https://api.pagar.me/core/v5' : 'https://sdx-api.pagar.me/core/v5';
+// A API v5 da Pagar.me usa uma URL base só - é a própria chave secreta
+// (sk_test_... ou a de produção) que determina se as cobranças são de
+// teste ou reais, não um subdomínio separado (diferente do Melhor Envio,
+// que tem sandbox.melhorenvio.com.br de verdade).
+const BASE_URL = 'https://api.pagar.me/core/v5';
 
 function onlyDigits(v) {
   return String(v || '').replace(/\D/g, '');
