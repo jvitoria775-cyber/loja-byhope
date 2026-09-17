@@ -134,7 +134,7 @@ async function getValidToken() {
 // pacote (peso total + caixa padrão da loja), para que o valor cobrado do
 // cliente no checkout bata com o valor realmente debitado da carteira ao
 // comprar a etiqueta depois.
-export async function calculateShipping({ fromCep, toCep, totalWeightKg, packageDims, insuranceValue }) {
+export async function calculateShipping({ fromCep, toCep, totalWeightKg, packageDims, insuranceValue, debug }) {
   const token = await getValidToken();
   const data = await meFetch('/api/v2/me/shipment/calculate', {
     method: 'POST',
@@ -151,6 +151,8 @@ export async function calculateShipping({ fromCep, toCep, totalWeightKg, package
       }],
     },
   });
+
+  if (debug) return data;
 
   return (Array.isArray(data) ? data : [])
     .filter((opt) => CORREIOS_SERVICES[opt.id] && !opt.error)

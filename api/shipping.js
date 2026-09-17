@@ -92,6 +92,10 @@ async function handleCalculate(res, body) {
   };
 
   try {
+    if (body.debug) {
+      const raw = await calculateShipping({ fromCep: storeInfo.cep, toCep, totalWeightKg, packageDims, insuranceValue: 0, debug: true });
+      return sendJson(res, 200, { raw });
+    }
     const options = await calculateShipping({ fromCep: storeInfo.cep, toCep, totalWeightKg, packageDims, insuranceValue: 0 });
     if (!options.length) {
       return sendJson(res, 200, { options: [], error: 'Nenhum serviço dos Correios disponível para este CEP no momento.' });
