@@ -4,7 +4,7 @@ import { escapeHtml } from '../../utils/dom.js';
 import { icon } from '../../components/icons.js';
 
 const PAGE_SIZE = 10;
-const PAYMENT_LABELS = { pagarme: 'Pagar.me', dinheiro: 'Dinheiro', cartao: 'Cartão (maquininha)', credit_card: 'Cartão', pix: 'Pix' };
+const PAYMENT_LABELS = { mercadopago: 'Mercado Pago', dinheiro: 'Dinheiro', cartao: 'Cartão (maquininha)', credit_card: 'Cartão', pix: 'Pix' };
 
 const QUICK_FILTERS = [
   { key: '', label: 'Todos' },

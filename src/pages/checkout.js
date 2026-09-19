@@ -1,7 +1,7 @@
 import { getItems, getSubtotal, getCount, getCoupon, clearCart } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
 import { calculateShipping, isValidCep } from '../services/shippingService.js';
-import { createCheckoutLink, createPixCharge } from '../services/paymentService.js';
+import { createOrder, createPixCharge, loadMercadoPago } from '../services/paymentService.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
@@ -13,6 +13,10 @@ import { navigate } from '../router.js';
 
 let shippingOptions = [];
 let selectedShipping = getItem('shippingChoice', null);
+// Guarda o pedido já criado no banco, pra não criar um segundo pedido
+// duplicado se o cliente tentar de novo depois de uma falha ao carregar o
+// Payment Brick (o pedido em si já foi salvo com sucesso nesse caso).
+let createdOrder = null;
 
 export function render() {
   const items = getItems();
@@ -90,11 +94,12 @@ export function render() {
                   <strong>Pagamento via Pix</strong>
                   <p>Ao confirmar, vamos gerar um <strong>QR code Pix</strong> na própria tela do pedido — é só escanear ou usar o código copia e cola no app do seu banco. A confirmação é automática assim que o pagamento cai.</p>
                 ` : `
-                  <strong>Pagamento seguro via Pagar.me</strong>
-                  <p>Ao confirmar, você será direcionado para a página segura da Pagar.me para escolher entre <strong>Pix</strong> ou <strong>Cartão de crédito</strong> e concluir o pagamento. Seus dados de cartão são digitados diretamente lá — nunca passam pelo nosso site.</p>
+                  <strong>Pagamento seguro com Mercado Pago</strong>
+                  <p>Escolha entre <strong>Pix</strong> ou <strong>cartão de crédito/débito</strong> sem sair do nosso site — é só clicar em "Ir para pagamento" abaixo. Seus dados de cartão são protegidos diretamente pelo Mercado Pago.</p>
                 `}
               </div>
             </div>
+            ${!user ? `<div id="mp-brick-container" style="margin-top:16px;"></div>` : ''}
           </div>
         </div>
 
@@ -107,7 +112,7 @@ export function render() {
             </div>`).join('')}
           <div id="checkout-totals">${renderTotals()}</div>
           ${user && getCount() < WHOLESALE_MIN_QTY ? `<p class="form-hint" style="color:var(--color-error);">Faltam ${WHOLESALE_MIN_QTY - getCount()} peça${WHOLESALE_MIN_QTY - getCount() > 1 ? 's' : ''} para atingir o pedido mínimo do atacado (${WHOLESALE_MIN_QTY} peças). <a href="#/produtos">Voltar aos produtos</a>.</p>` : ''}
-          <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px;" ${user && getCount() < WHOLESALE_MIN_QTY ? 'disabled' : ''}>Confirmar pedido</button>
+          <button type="submit" id="checkout-submit-btn" class="btn btn-primary btn-block" style="margin-top:16px;" ${user && getCount() < WHOLESALE_MIN_QTY ? 'disabled' : ''}>${user ? 'Confirmar pedido' : 'Ir para pagamento'}</button>
         </aside>
       </div>
     </form>
@@ -153,6 +158,7 @@ function renderTotals() {
 export function afterRender() {
   document.title = 'Checkout | GRATITUDE TÊXTIL';
   if (!getItems().length) return;
+  createdOrder = null;
 
   const cpfInput = document.getElementById('f-cpf');
   cpfInput?.addEventListener('input', () => {
@@ -232,45 +238,86 @@ export function afterRender() {
       return;
     }
 
-    const data = Object.fromEntries(new FormData(form).entries());
-    const order = buildOrder(data);
-
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalLabel = submitBtn.textContent;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Gerando pagamento seguro...';
 
     try {
-      const token = getToken();
-      const orderHeaders = { 'Content-Type': 'application/json' };
-      if (token) orderHeaders.Authorization = `Bearer ${token}`;
-      const createRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: orderHeaders,
-        body: JSON.stringify(order),
-      });
-      if (!createRes.ok) throw new Error('Não foi possível registrar o pedido. Tente novamente.');
+      if (!createdOrder) {
+        const data = Object.fromEntries(new FormData(form).entries());
+        const order = buildOrder(data);
+        const token = getToken();
+        const orderHeaders = { 'Content-Type': 'application/json' };
+        if (token) orderHeaders.Authorization = `Bearer ${token}`;
+        const createRes = await fetch('/api/orders', {
+          method: 'POST',
+          headers: orderHeaders,
+          body: JSON.stringify(order),
+        });
+        if (!createRes.ok) throw new Error('Não foi possível registrar o pedido. Tente novamente.');
+        createdOrder = order;
+      }
 
       if (getCurrentUser()) {
         // Cliente atacadista: cobrança Pix direta, sem sair do site - a
         // própria página do pedido mostra o QR code e fica aguardando a
         // confirmação automática (webhook).
-        await createPixCharge({ orderId: order.id });
+        await createPixCharge({ orderId: createdOrder.id });
         clearCart();
-        navigate(`/pedido/${order.id}`);
+        navigate(`/pedido/${createdOrder.id}`);
         return;
       }
 
-      const redirectUrl = `${location.origin}${location.pathname}#/pedido/${order.id}`;
-      const paymentUrl = await createCheckoutLink({ orderId: order.id, redirectUrl });
-      clearCart();
-      window.location.href = paymentUrl;
+      // Varejo: esconde o botão principal e mostra o Payment Brick
+      // embutido (cartão ou Pix, o cliente escolhe dentro do próprio
+      // widget) - o botão de pagar de verdade passa a ser o do Brick.
+      submitBtn.style.display = 'none';
+      await mountPaymentBrick(createdOrder);
     } catch (err) {
       submitBtn.disabled = false;
       submitBtn.textContent = originalLabel;
       showToast(err.message || 'Não foi possível iniciar o pagamento. Tente novamente.', 'error');
     }
   });
+}
+
+async function mountPaymentBrick(order) {
+  const container = document.getElementById('mp-brick-container');
+  container.innerHTML = `<p class="form-hint">Carregando formas de pagamento...</p>`;
+
+  try {
+    const mp = await loadMercadoPago();
+    container.innerHTML = '';
+    await mp.bricks().create('payment', 'mp-brick-container', {
+      initialization: {
+        amount: order.total,
+        payer: { email: order.customer.email },
+      },
+      customization: {
+        paymentMethods: { creditCard: 'all', debitCard: 'all', bankTransfer: 'all' },
+      },
+      callbacks: {
+        onError: () => showToast('Não foi possível carregar o formulário de pagamento.', 'error'),
+        onSubmit: ({ selectedPaymentMethod, formData }) => new Promise((resolve, reject) => {
+          createOrder({ orderId: order.id, selectedPaymentMethod, formData })
+            .then(() => {
+              resolve();
+              clearCart();
+              navigate(`/pedido/${order.id}`);
+            })
+            .catch((err) => {
+              showToast(err.message || 'Não foi possível processar o pagamento.', 'error');
+              reject();
+            });
+        }),
+      },
+    });
+  } catch (err) {
+    container.innerHTML = `<p class="form-hint" style="color:var(--color-error);">${escapeHtml(err.message)}</p>`;
+    document.getElementById('checkout-submit-btn').style.display = '';
+    throw err;
+  }
 }
 
 function validateForm(form) {
@@ -306,7 +353,7 @@ function buildOrder(data) {
     customer: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, document: onlyDigits(data.cpf) },
     address: { cep: data.cep, street: data.street, number: data.number, complement: data.complement, neighborhood: data.neighborhood, city: data.city, state: data.state },
     shipping: selectedShipping,
-    payment: { method: 'pagarme', status: 'aguardando confirmação' },
+    payment: { method: 'mercadopago', status: 'aguardando confirmação' },
     coupon,
     subtotal, discount, shippingDiscount, shippingPrice: finalShipping, total,
   };

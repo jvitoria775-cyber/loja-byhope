@@ -28,9 +28,11 @@ export default async function handler(req, res) {
       hiddenProductIds: map.hidden_products || [],
       shippingConfig: { ...DEFAULT_SHIPPING_CONFIG, ...(map.shipping_config || {}) },
       melhorEnvio,
-      pagarme: {
-        connected: !!process.env.PAGARME_SECRET_KEY,
-        env: (process.env.PAGARME_ENV || 'test').toLowerCase(),
+      mercadoPago: {
+        connected: !!process.env.MERCADOPAGO_ACCESS_TOKEN,
+        // A Public Key não é segredo - é feita pra ir pro navegador (o
+        // Payment Brick precisa dela pra tokenizar o cartão no cliente).
+        publicKey: process.env.MERCADOPAGO_PUBLIC_KEY || null,
       },
     });
   }

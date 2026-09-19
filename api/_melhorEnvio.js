@@ -266,8 +266,8 @@ async function runPurchaseLabel(order) {
 
 // Compra e gera a etiqueta automaticamente assim que um pedido de entrega
 // (não retirada) é marcado como pago - dispara tanto na confirmação de
-// pagamento (webhook da Pagar.me ou redirecionamento) quanto quando o
-// painel marca manualmente. Fica aqui (não em api/orders/[id].js) porque
+// pagamento (webhook do Mercado Pago) quanto quando o painel marca
+// manualmente. Fica aqui (não em api/orders/[id].js) porque
 // tanto api/orders/[id].js quanto api/payment.js (webhook) precisam dela,
 // e dois arquivos de rota nunca importam um do outro - só de um helper
 // `_` compartilhado. Nunca lança erro pra fora: se falhar (saldo

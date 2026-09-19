@@ -8,8 +8,8 @@ import { icon } from '../../components/icons.js';
 
 // Alíquotas estimadas para a demonstração do painel: 10% de imposto (regime
 // Simples Nacional, faixa inicial para comércio) + 6% de taxa média de
-// pagamento (cartão/Pix via Pagar.me). Ambas são estimativas para fins de
-// relatório interno, não um cálculo fiscal oficial.
+// pagamento (cartão/Pix via Mercado Pago). Ambas são estimativas para fins
+// de relatório interno, não um cálculo fiscal oficial.
 const TAX_RATE = 0.10;
 const PAYMENT_FEE_RATE = 0.06;
 

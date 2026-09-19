@@ -1,7 +1,7 @@
 import { isUnlocked, renderGate, lock } from './adminAuth.js';
 import { getCatalogProducts } from '../services/catalogService.js';
 import { saveOrder, generatePdvOrderId } from './orderStore.js';
-import { createCheckoutLink } from '../services/paymentService.js';
+import { createPixCharge } from '../services/paymentService.js';
 import { apiGet } from './apiClient.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -316,7 +316,7 @@ function renderCart() {
     <div class="pdv-pay-tabs">
       <button type="button" data-pay="dinheiro" class="${paymentMethod === 'dinheiro' ? 'active' : ''}">Dinheiro</button>
       <button type="button" data-pay="cartao" class="${paymentMethod === 'cartao' ? 'active' : ''}">Cartão (maquininha)</button>
-      <button type="button" data-pay="pagarme" class="${paymentMethod === 'pagarme' ? 'active' : ''}">Pix/Cartão Pagar.me</button>
+      <button type="button" data-pay="mercadopago" class="${paymentMethod === 'mercadopago' ? 'active' : ''}">Pix Mercado Pago</button>
     </div>
 
     <button type="button" class="btn btn-primary btn-block" id="pdv-finish-btn">Finalizar venda — ${formatBRL(total)}</button>
@@ -350,22 +350,19 @@ async function finishSale() {
     customer: { firstName: name || 'Cliente balcão', lastName: '', email: '', phone },
     address: null,
     shipping: { type: 'retirada', label: 'Venda no balcão', price: 0, days: 0 },
-    payment: { method: paymentMethod, status: paymentMethod === 'pagarme' ? 'aguardando confirmação' : 'pago' },
+    payment: { method: paymentMethod, status: paymentMethod === 'mercadopago' ? 'aguardando confirmação' : 'pago' },
     coupon: null,
     subtotal, discount: manualDiscount, shippingDiscount: 0, shippingPrice: 0, total,
   };
 
   finishBtn.disabled = true;
 
-  if (paymentMethod === 'pagarme') {
+  if (paymentMethod === 'mercadopago') {
     finishBtn.textContent = 'Gerando cobrança...';
     try {
       await saveOrder(order);
-      const url = await createCheckoutLink({
-        orderId: order.id,
-        redirectUrl: `${location.origin}/admin.html`,
-      });
-      showPixReceipt(order, url);
+      const { qrCode, qrCodeBase64 } = await createPixCharge({ orderId: order.id });
+      showPixReceipt(order, qrCode, qrCodeBase64);
     } catch (err) {
       finishBtn.disabled = false;
       finishBtn.textContent = `Finalizar venda — ${formatBRL(total)}`;
@@ -384,18 +381,30 @@ async function finishSale() {
   }
 }
 
-function showPixReceipt(order, paymentUrl) {
+function showPixReceipt(order, qrCode, qrCodeBase64) {
   const root = document.getElementById('pdv-modal-root');
   root.innerHTML = `
     <div class="modal-overlay">
       <div class="modal-box" style="text-align:center;">
-        <h2 style="font-size:18px;margin-bottom:10px;">Cobrança gerada!</h2>
-        <p style="color:var(--color-text-soft);font-size:13px;margin-bottom:16px;">Peça para o cliente escanear ou abra o link abaixo para pagar via Pix ou cartão.</p>
-        <a href="${escapeHtml(paymentUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-block" style="margin-bottom:10px;">Abrir cobrança Pagar.me</a>
-        <p style="font-size:11px;color:var(--color-text-faint);word-break:break-all;margin-bottom:16px;">${escapeHtml(paymentUrl)}</p>
+        <h2 style="font-size:18px;margin-bottom:10px;">Cobrança Pix gerada!</h2>
+        <p style="color:var(--color-text-soft);font-size:13px;margin-bottom:16px;">Peça para o cliente escanear o QR code ou usar o Pix Copia e Cola.</p>
+        ${qrCodeBase64 ? `<img src="data:image/png;base64,${escapeHtml(qrCodeBase64)}" alt="QR code Pix" style="width:200px;height:200px;margin:0 auto 16px;display:block;border:1px solid var(--color-border-soft);border-radius:var(--radius-md);">` : ''}
+        <div class="pix-copy-row" style="margin-bottom:16px;">
+          <input type="text" readonly value="${escapeHtml(qrCode || '')}" id="pdv-pix-copy-input" style="flex:1;padding:8px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:12px;">
+          <button type="button" class="btn btn-outline btn-sm" id="pdv-pix-copy-btn">Copiar</button>
+        </div>
         <button type="button" class="btn btn-outline btn-block" id="pdv-new-sale">Nova venda</button>
       </div>
     </div>`;
+  document.getElementById('pdv-pix-copy-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('pdv-pix-copy-input');
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch {
+      input.select();
+      document.execCommand('copy');
+    }
+  });
   document.getElementById('pdv-new-sale').addEventListener('click', resetSale);
 }
 

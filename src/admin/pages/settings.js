@@ -3,7 +3,7 @@ import { seedDemoData, clearDemoData, hasDemoOrders } from '../mockData.js';
 import { getAllOrders } from '../orderStore.js';
 import {
   getStoreSettings, saveStoreSettings, getStoreDiscountPercent, setStoreDiscountPercent,
-  getShippingConfig, saveShippingConfig, getMelhorEnvioStatus, getPagarmeStatus,
+  getShippingConfig, saveShippingConfig, getMelhorEnvioStatus, getMercadoPagoStatus,
 } from '../settingsStore.js';
 import { setStockForAllProducts } from '../productAdminStore.js';
 import { escapeHtml } from '../../utils/dom.js';
@@ -19,8 +19,8 @@ const DEFAULT_CATEGORY_WEIGHTS_KG = {
 const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
 export async function render() {
-  const [store, discountPercent, orders, shippingConfig, melhorEnvio, pagarme] = await Promise.all([
-    getStoreSettings(), getStoreDiscountPercent(), getAllOrders(), getShippingConfig(), getMelhorEnvioStatus(), getPagarmeStatus(),
+  const [store, discountPercent, orders, shippingConfig, melhorEnvio, mercadoPago] = await Promise.all([
+    getStoreSettings(), getStoreDiscountPercent(), getAllOrders(), getShippingConfig(), getMelhorEnvioStatus(), getMercadoPagoStatus(),
   ]);
   const seeded = hasDemoOrders(orders);
 
@@ -62,14 +62,14 @@ export async function render() {
       <div class="panel">
         <h2>Integrações</h2>
         <div class="integration-row">
-          <div>${icon('creditCard', 'icon')}<div><strong>Pagar.me</strong><span>Gateway de pagamento (varejo: cartão + Pix · atacado: só Pix)</span></div></div>
+          <div>${icon('creditCard', 'icon')}<div><strong>Mercado Pago</strong><span>Gateway de pagamento (varejo: cartão + Pix · atacado: só Pix, tudo embutido no site)</span></div></div>
           <div style="text-align:right;">
-            ${pagarme.connected
-              ? `<span class="badge-pill badge-pago">Configurada${pagarme.env === 'test' ? ' (teste)' : ''}</span>`
+            ${mercadoPago.connected
+              ? `<span class="badge-pill badge-pago">Configurada</span>`
               : `<span class="badge-pill badge-pendente">Não configurada</span>`}
           </div>
         </div>
-        ${!pagarme.connected ? `<p style="font-size:11.5px;color:var(--color-text-faint);margin-top:10px;">Configure <code>PAGARME_SECRET_KEY</code> nas variáveis de ambiente da Vercel para ativar.</p>` : ''}
+        ${!mercadoPago.connected ? `<p style="font-size:11.5px;color:var(--color-text-faint);margin-top:10px;">Configure <code>MERCADOPAGO_ACCESS_TOKEN</code> e <code>MERCADOPAGO_PUBLIC_KEY</code> nas variáveis de ambiente da Vercel para ativar.</p>` : ''}
         <div class="integration-row">
           <div>${icon('truck', 'icon')}<div><strong>Melhor Envio</strong><span>Cotação e etiquetas de frete (Correios e JeT)</span></div></div>
           <div style="text-align:right;">

@@ -3,15 +3,16 @@ import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 
 const PAYMENT_LABELS = {
-  pagarme: 'Pagar.me',
+  mercadopago: 'Mercado Pago',
   credit_card: 'Cartão de Crédito',
+  debit_card: 'Cartão de Débito',
   pix: 'Pix',
 };
 
 let currentOrder = null;
 let pollTimer = null;
 
-export async function render(params, query = {}) {
+export async function render(params) {
   const id = params[0];
   let order = null;
   try {
@@ -30,27 +31,6 @@ export async function render(params, query = {}) {
     </div>`;
   }
 
-  // Alguns gateways devolvem parâmetros na URL depois do redirecionamento
-  // de pagamento. A confirmação de verdade agora vem do webhook (servidor
-  // a servidor, mais confiável), mas mantemos essa checagem como reforço
-  // caso a Pagar.me também mande algo no redirecionamento.
-  const searchParams = new URLSearchParams(location.search);
-  const captureMethod = query.capture_method || searchParams.get('capture_method');
-  const transactionNsu = query.transaction_nsu || searchParams.get('transaction_nsu');
-  const receiptUrl = query.receipt_url || searchParams.get('receipt_url');
-
-  if (captureMethod || transactionNsu) {
-    try {
-      const res = await fetch(`/api/orders/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'confirm-payment', captureMethod, transactionNsu, receiptUrl }),
-      });
-      if (res.ok) ({ order } = await res.json());
-      currentOrder = order;
-    } catch { /* mantém os dados já carregados se a confirmação falhar */ }
-  }
-
   return renderOrderHtml(order);
 }
 
@@ -66,11 +46,12 @@ function renderOrderHtml(order) {
       <div class="pix-wait-block" id="pix-wait-block">
         <h1 style="margin-bottom:6px;">Falta só o pagamento!</h1>
         <p class="section-sub" style="margin:0 auto 20px;">Escaneie o QR code ou use o Pix Copia e Cola. A confirmação é automática — essa página atualiza sozinha assim que o pagamento cair.</p>
-        ${order.payment.pixQrCodeUrl ? `<img src="${escapeHtml(order.payment.pixQrCodeUrl)}" alt="QR code Pix" style="width:220px;height:220px;margin:0 auto 18px;display:block;border:1px solid var(--color-border-soft);border-radius:var(--radius-md);">` : ''}
+        ${order.payment.pixQrCodeBase64 ? `<img src="data:image/png;base64,${escapeHtml(order.payment.pixQrCodeBase64)}" alt="QR code Pix" style="width:220px;height:220px;margin:0 auto 18px;display:block;border:1px solid var(--color-border-soft);border-radius:var(--radius-md);">` : ''}
         <div class="pix-copy-row">
           <input type="text" id="pix-copy-input" readonly value="${escapeHtml(order.payment.pixQrCode || '')}">
           <button type="button" class="btn btn-primary" id="pix-copy-btn">Copiar código</button>
         </div>
+        ${order.payment.pixTicketUrl ? `<p class="form-hint" style="margin-top:10px;"><a href="${escapeHtml(order.payment.pixTicketUrl)}" target="_blank" rel="noopener noreferrer">Ou abra o link de pagamento</a></p>` : ''}
         <p class="form-hint" style="margin-top:14px;">Aguardando pagamento — não feche esta página.</p>
       </div>` : `
       <div class="success-icon">${icon('check')}</div>
