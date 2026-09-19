@@ -36,8 +36,12 @@ function onlyDigits(v) {
 }
 
 function getClientCreds() {
-  const clientId = process.env.MELHOR_ENVIO_CLIENT_ID;
-  const clientSecret = process.env.MELHOR_ENVIO_CLIENT_SECRET;
+  // .trim() por precaução - já tivemos espaço/quebra de linha acidental
+  // colado numa variável de ambiente da Vercel (mesmo problema com a chave
+  // da Pagar.me), e isso quebra a autenticação de forma bem confusa de
+  // diagnosticar (erro genérico "Client authentication failed").
+  const clientId = (process.env.MELHOR_ENVIO_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.MELHOR_ENVIO_CLIENT_SECRET || '').trim();
   if (!clientId || !clientSecret) {
     throw new Error('Melhor Envio não configurado (MELHOR_ENVIO_CLIENT_ID/MELHOR_ENVIO_CLIENT_SECRET ausentes nas variáveis de ambiente da Vercel).');
   }
