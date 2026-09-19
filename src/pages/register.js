@@ -3,6 +3,8 @@ import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
 import { escapeHtml } from '../utils/dom.js';
 import { isValidCpf, isValidCnpj, isValidEmail, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
+import { lookupCep } from '../services/cepService.js';
+import { isValidCep } from '../services/shippingService.js';
 
 const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
@@ -210,6 +212,24 @@ export function afterRender() {
   const docInput = document.getElementById('reg-doc');
   docInput.addEventListener('input', () => {
     docInput.value = docType === 'cnpj' ? formatCnpj(docInput.value) : formatCpf(docInput.value);
+  });
+
+  document.getElementById('reg-cep')?.addEventListener('blur', async (e) => {
+    if (!isValidCep(e.target.value)) return;
+    const address = await lookupCep(e.target.value);
+    if (!address) return;
+    const streetInput = document.getElementById('reg-street');
+    const neighborhoodInput = document.getElementById('reg-neighborhood');
+    const cityInput = document.getElementById('reg-city');
+    const stateSelect = document.getElementById('reg-state');
+    if (streetInput) streetInput.value = address.street;
+    if (neighborhoodInput) neighborhoodInput.value = address.neighborhood;
+    if (cityInput) cityInput.value = address.city;
+    if (stateSelect && address.state) stateSelect.value = address.state;
+    [streetInput, neighborhoodInput, cityInput, stateSelect].forEach((input) => {
+      input?.closest('.form-field')?.classList.remove('invalid');
+    });
+    document.getElementById('reg-number')?.focus();
   });
 
   const form = document.getElementById('register-form');

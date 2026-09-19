@@ -1,6 +1,7 @@
 import { getItems, getSubtotal, getCount, getCoupon, clearCart } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
 import { calculateShipping, isValidCep } from '../services/shippingService.js';
+import { lookupCep } from '../services/cepService.js';
 import { createOrder, createPixCharge, loadMercadoPago } from '../services/paymentService.js';
 import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
@@ -192,6 +193,27 @@ function setAddressRequired(required) {
   if (section) section.style.opacity = required ? '' : '0.55';
 }
 
+// Preenche rua/bairro/cidade/estado sozinho a partir do CEP (ViaCEP) -
+// só sobra número e complemento pro cliente digitar. Falha em silêncio
+// (CEP não encontrado, serviço fora do ar) - os campos continuam vazios
+// e editáveis normalmente nesse caso.
+async function fillAddressFromCep(cep) {
+  const address = await lookupCep(cep);
+  if (!address) return;
+  const streetInput = document.querySelector('[name="street"]');
+  const neighborhoodInput = document.querySelector('[name="neighborhood"]');
+  const cityInput = document.querySelector('[name="city"]');
+  const stateSelect = document.querySelector('[name="state"]');
+  if (streetInput) streetInput.value = address.street;
+  if (neighborhoodInput) neighborhoodInput.value = address.neighborhood;
+  if (cityInput) cityInput.value = address.city;
+  if (stateSelect && address.state) stateSelect.value = address.state;
+  [streetInput, neighborhoodInput, cityInput, stateSelect].forEach((input) => {
+    input?.closest('.form-field')?.classList.remove('invalid');
+  });
+  document.getElementById('f-number')?.focus();
+}
+
 function applyDeliveryMethod(mode) {
   const shippingEl = document.getElementById('checkout-shipping-options');
   document.querySelectorAll('[data-delivery-toggle]').forEach((label) => {
@@ -234,6 +256,7 @@ export function afterRender() {
   const cepInput = document.getElementById('f-cep');
   cepInput?.addEventListener('blur', async () => {
     if (cepInput.disabled || !isValidCep(cepInput.value)) return;
+    fillAddressFromCep(cepInput.value);
     const el = document.getElementById('checkout-shipping-options');
     el.innerHTML = `<p class="form-hint">Calculando frete...</p>`;
 
