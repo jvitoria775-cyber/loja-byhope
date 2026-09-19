@@ -163,7 +163,7 @@ export function afterRender() {
   cepInput?.addEventListener('blur', async () => {
     if (!isValidCep(cepInput.value)) return;
     const el = document.getElementById('checkout-shipping-options');
-    el.innerHTML = `<p class="form-hint">Calculando frete pelos Correios...</p>`;
+    el.innerHTML = `<p class="form-hint">Calculando frete...</p>`;
 
     let result;
     try {

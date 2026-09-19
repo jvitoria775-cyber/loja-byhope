@@ -12,10 +12,11 @@ const ENV = (process.env.MELHOR_ENVIO_ENV || 'sandbox').toLowerCase();
 const BASE_URL = ENV === 'production' ? 'https://melhorenvio.com.br' : 'https://sandbox.melhorenvio.com.br';
 const USER_AGENT = 'Gratitude Textil - integracao@gratitudetextil.com.br';
 
-// Só Correios por enquanto, a pedido da loja - qualquer outra transportadora
-// que a cotação devolva é descartada antes de chegar no checkout.
-const CORREIOS_SERVICES = { 1: 'pac', 2: 'sedex' };
-const SERVICE_LABELS = { 1: 'Correios PAC', 2: 'Correios SEDEX' };
+// Serviços liberados no checkout, a pedido da loja - qualquer outro que a
+// cotação devolva (Jadlog, Loggi etc.) é descartado antes de chegar no
+// cliente. Id 33 = "Standard" da transportadora JeT.
+const ALLOWED_SERVICES = { 1: 'pac', 2: 'sedex', 33: 'jet' };
+const SERVICE_LABELS = { 1: 'Correios PAC', 2: 'Correios SEDEX', 33: 'JeT Standard' };
 
 // Peso padrão por categoria (kg) e caixa padrão da loja (cm) - editáveis
 // em Configurações > Frete. Usados tanto na cotação do checkout quanto na
@@ -161,10 +162,10 @@ export async function calculateShipping({ fromCep, toCep, totalWeightKg, package
   if (debug) return data;
 
   return (Array.isArray(data) ? data : [])
-    .filter((opt) => CORREIOS_SERVICES[opt.id] && !opt.error)
+    .filter((opt) => ALLOWED_SERVICES[opt.id] && !opt.error)
     .map((opt) => ({
       serviceId: opt.id,
-      type: CORREIOS_SERVICES[opt.id],
+      type: ALLOWED_SERVICES[opt.id],
       label: SERVICE_LABELS[opt.id],
       price: Number(opt.price),
       days: Number(opt.delivery_time ?? opt.custom_delivery_time ?? 0),

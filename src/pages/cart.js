@@ -181,7 +181,7 @@ async function calcShipping() {
     return;
   }
 
-  resultsEl.innerHTML = `<p class="form-hint">Calculando frete pelos Correios...</p>`;
+  resultsEl.innerHTML = `<p class="form-hint">Calculando frete...</p>`;
 
   let result;
   try {

@@ -1,8 +1,9 @@
-// Cotação real de frete via Melhor Envio (só Correios: PAC e SEDEX, a
-// pedido da loja). O peso de cada item vem da categoria do produto (a
-// própria API resolve o peso/caixa padrão configurados em Configurações >
-// Frete) - o navegador só manda categoria + quantidade, nunca peso, pra
-// não depender de nenhum dado sensível a manipulação ficar só no cliente.
+// Cotação real de frete via Melhor Envio (Correios PAC/SEDEX + JeT
+// Standard, a pedido da loja). O peso de cada item vem da categoria do
+// produto (a própria API resolve o peso/caixa padrão configurados em
+// Configurações > Frete) - o navegador só manda categoria + quantidade,
+// nunca peso, pra não depender de nenhum dado sensível a manipulação
+// ficar só no cliente.
 export function isValidCep(cep) {
   return /^\d{5}-?\d{3}$/.test((cep || '').trim());
 }

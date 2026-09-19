@@ -71,7 +71,7 @@ export async function render() {
         </div>
         ${!pagarme.connected ? `<p style="font-size:11.5px;color:var(--color-text-faint);margin-top:10px;">Configure <code>PAGARME_SECRET_KEY</code> nas variáveis de ambiente da Vercel para ativar.</p>` : ''}
         <div class="integration-row">
-          <div>${icon('truck', 'icon')}<div><strong>Melhor Envio</strong><span>Cotação e etiquetas de frete (Correios)</span></div></div>
+          <div>${icon('truck', 'icon')}<div><strong>Melhor Envio</strong><span>Cotação e etiquetas de frete (Correios e JeT)</span></div></div>
           <div style="text-align:right;">
             ${melhorEnvio.connected
               ? `<span class="badge-pill badge-pago">Conectado${melhorEnvio.env === 'sandbox' ? ' (sandbox)' : ''}</span>`
