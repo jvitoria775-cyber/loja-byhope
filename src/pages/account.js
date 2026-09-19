@@ -16,9 +16,9 @@ export async function render(params, query = {}) {
     <div class="auth-page">
       <div class="auth-card">
         <h1>Minha Conta</h1>
-        <p class="section-sub">Entre com sua conta atacadista para ver seus dados e pedidos.</p>
+        <p class="section-sub">Entre com sua conta para ver seus dados e pedidos.</p>
         <a href="#/login" class="btn btn-primary btn-block">Entrar</a>
-        <p class="auth-switch">Ainda não tem conta? <a href="#/atacado" class="btn-link">Cadastre-se gratuitamente</a></p>
+        <p class="auth-switch">Ainda não tem conta? <a href="#/cadastro" class="btn-link">Cadastre-se gratuitamente</a></p>
       </div>
     </div>`;
   }
@@ -158,7 +158,7 @@ function pedidosTabHtml(orders) {
     <div class="empty-state" style="padding:40px 20px;">
       <div class="icon-circle">${icon('package', 'icon')}</div>
       <h3>Você ainda não fez nenhum pedido.</h3>
-      <p>Seus pedidos como cliente atacadista vão aparecer aqui.</p>
+      <p>Seus pedidos vão aparecer aqui.</p>
       <a href="#/produtos" class="btn btn-outline">Explorar produtos</a>
     </div>`;
   }

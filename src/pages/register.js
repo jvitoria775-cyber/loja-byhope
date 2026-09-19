@@ -7,30 +7,39 @@ import { isValidCpf, isValidCnpj, isValidEmail, formatCpf, formatCnpj, onlyDigit
 const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
 let docType = 'cpf';
+let accountType = 'wholesale';
 
 export function render() {
   const user = getCurrentUser();
   if (user) {
+    const wholesale = user.status !== 'inactive';
     return `
     <div class="auth-page">
       <div class="auth-card">
         <h1>Você já está conectado(a)</h1>
-        <p class="section-sub">Olá, ${escapeHtml((user.fullName || '').split(' ')[0])}! Sua conta atacadista já está ativa.</p>
+        <p class="section-sub">Olá, ${escapeHtml((user.fullName || '').split(' ')[0])}! ${wholesale ? 'Sua conta atacadista já está ativa.' : 'Sua conta já está criada.'}</p>
         <a href="#/produtos" class="btn btn-primary btn-block">Ir às compras</a>
       </div>
     </div>`;
   }
 
   docType = 'cpf';
+  accountType = 'wholesale';
 
   return `
   <div class="auth-page auth-page-wide">
     <div class="auth-card">
-      <div style="text-align:center;margin-bottom:14px;"><span class="wholesale-badge">Cadastro de cliente atacadista</span></div>
-      <h1>Comprar no Atacado</h1>
-      <p class="section-sub">Crie sua conta gratuita para desbloquear os preços de atacado da Gratitude Têxtil.</p>
+      <div style="text-align:center;margin-bottom:14px;"><span class="wholesale-badge" id="reg-badge">Cadastro de cliente atacadista</span></div>
+      <h1 id="reg-title">Comprar no Atacado</h1>
+      <p class="section-sub" id="reg-subtitle">Crie sua conta gratuita para desbloquear os preços de atacado da Gratitude Têxtil.</p>
 
       <form id="register-form" novalidate>
+        <p class="form-section-title">Como você vai comprar?</p>
+        <div class="doc-type-toggle" id="account-type-toggle">
+          <button type="button" data-account-type="wholesale" class="active">Atacado (revenda)</button>
+          <button type="button" data-account-type="retail">Varejo (uso próprio)</button>
+        </div>
+
         <p class="form-section-title">Tipo de cadastro</p>
         <div class="doc-type-toggle" id="doc-type-toggle">
           <button type="button" data-doc-type="cpf" class="active">Pessoa Física (CPF)</button>
@@ -50,7 +59,7 @@ export function render() {
             <input type="text" id="reg-doc" name="docNumber" required placeholder="000.000.000-00" inputmode="numeric" />
             <span class="error-msg" id="reg-doc-error">CPF inválido.</span>
           </div>
-          <div class="form-field" data-field="storeName">
+          <div class="form-field" data-field="storeName" id="store-name-field">
             <label for="reg-store">Nome da loja</label>
             <input type="text" id="reg-store" name="storeName" placeholder="Nome da sua loja (opcional)" />
           </div>
@@ -121,11 +130,36 @@ export function render() {
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block" style="margin-top:8px;">Criar minha conta atacadista</button>
+        <button type="submit" id="reg-submit-btn" class="btn btn-primary btn-block" style="margin-top:8px;">Criar minha conta atacadista</button>
       </form>
       <p class="auth-switch">Já tem conta? <a href="#/login" class="btn-link">Entrar</a></p>
     </div>
   </div>`;
+}
+
+function setAccountType(type) {
+  accountType = type;
+  document.querySelectorAll('#account-type-toggle [data-account-type]').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-account-type') === type);
+  });
+  const badge = document.getElementById('reg-badge');
+  const title = document.getElementById('reg-title');
+  const subtitle = document.getElementById('reg-subtitle');
+  const submitBtn = document.getElementById('reg-submit-btn');
+  const storeField = document.getElementById('store-name-field');
+  if (type === 'retail') {
+    badge.textContent = 'Cadastro de cliente';
+    title.textContent = 'Criar minha conta';
+    subtitle.textContent = 'Crie sua conta gratuita para acompanhar seus pedidos na Gratitude Têxtil.';
+    submitBtn.textContent = 'Criar minha conta';
+    storeField.style.display = 'none';
+  } else {
+    badge.textContent = 'Cadastro de cliente atacadista';
+    title.textContent = 'Comprar no Atacado';
+    subtitle.textContent = 'Crie sua conta gratuita para desbloquear os preços de atacado da Gratitude Têxtil.';
+    submitBtn.textContent = 'Criar minha conta atacadista';
+    storeField.style.display = '';
+  }
 }
 
 function setDocType(type) {
@@ -155,6 +189,10 @@ function setDocType(type) {
 export function afterRender() {
   document.title = 'Comprar no Atacado | GRATITUDE TÊXTIL';
   if (getCurrentUser()) return;
+
+  document.querySelectorAll('#account-type-toggle [data-account-type]').forEach((btn) => {
+    btn.addEventListener('click', () => setAccountType(btn.getAttribute('data-account-type')));
+  });
 
   document.querySelectorAll('#doc-type-toggle [data-doc-type]').forEach((btn) => {
     btn.addEventListener('click', () => setDocType(btn.getAttribute('data-doc-type')));
@@ -199,6 +237,7 @@ export function afterRender() {
     submitBtn.textContent = 'Criando sua conta...';
 
     const result = await register({
+      wholesale: accountType === 'wholesale',
       docType,
       docNumber: onlyDigits(data.docNumber),
       fullName: data.fullName,

@@ -28,8 +28,15 @@ export function getToken() {
   return session?.token || null;
 }
 
+// Cliente logado, mas com o atacado desativado pelo painel (ou que se
+// cadastrou como varejo desde o início - ver register.js), continua
+// logado normalmente (Minha Conta, pedidos), só não conta como
+// "atacadista" pra decidir o fluxo de compra (checkout, mínimo de peças
+// etc.) - só o preço em si já é sempre resolvido pelo servidor, nunca
+// por aqui (ver comentário em api/products/index.js).
 export function isWholesale() {
-  return !!getCurrentUser();
+  const user = getCurrentUser();
+  return !!user && user.status !== 'inactive';
 }
 
 function setSession(token, customer) {

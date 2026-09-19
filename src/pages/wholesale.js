@@ -1,4 +1,4 @@
-import { getCurrentUser } from '../context/authStore.js';
+import { getCurrentUser, isWholesale } from '../context/authStore.js';
 import { icon } from '../components/icons.js';
 import { escapeHtml } from '../utils/dom.js';
 
@@ -11,6 +11,7 @@ const BENEFITS = [
 
 export function render() {
   const user = getCurrentUser();
+  const wholesale = isWholesale();
 
   return `
   <div class="container" style="max-width:880px;margin:60px auto 100px;padding:0 20px;text-align:center;">
@@ -18,8 +19,10 @@ export function render() {
     <h1 style="font-size:34px;margin:18px 0 12px;">Compre no atacado com a Gratitude Têxtil</h1>
     <p class="section-sub" style="max-width:560px;margin:0 auto 30px;">Crie sua conta gratuita de cliente atacadista e tenha acesso aos preços exclusivos para revenda em todo o nosso catálogo.</p>
 
-    ${user
+    ${wholesale
       ? `<a href="#/produtos" class="btn btn-primary" style="padding:16px 34px;">Ver produtos com preço de atacado</a>`
+      : user
+      ? `<div><p class="form-hint" style="margin-bottom:10px;">Sua conta ainda não tem acesso aos preços de atacado.</p><a href="#/contato" class="btn btn-primary" style="padding:16px 34px;">Falar com a loja</a></div>`
       : `<div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
           <a href="#/cadastro" class="btn btn-primary" style="padding:16px 34px;">Quero comprar no atacado</a>
           <a href="#/login" class="btn btn-outline" style="padding:16px 34px;">Já tenho conta</a>

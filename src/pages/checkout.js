@@ -6,7 +6,7 @@ import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 import { showToast } from '../components/toast.js';
-import { getCurrentUser, getToken, WHOLESALE_MIN_QTY } from '../context/authStore.js';
+import { getCurrentUser, getToken, isWholesale, WHOLESALE_MIN_QTY } from '../context/authStore.js';
 import { setItem, getItem } from '../utils/storage.js';
 import { isValidCpf, isValidCnpj, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
 import { navigate } from '../router.js';
@@ -36,6 +36,7 @@ export function render() {
   }
 
   const user = getCurrentUser();
+  const wholesale = isWholesale();
 
   return `
   <div class="page-header">
@@ -69,7 +70,7 @@ export function render() {
 
           <div class="checkout-section" id="address-section">
             <h3><span class="step-num">2</span> Endereço de entrega</h3>
-            ${user ? `<p class="form-hint" id="address-optional-note" style="display:none;">Não é necessário preencher o endereço para retirada na loja.</p>` : ''}
+            ${wholesale ? `<p class="form-hint" id="address-optional-note" style="display:none;">Não é necessário preencher o endereço para retirada na loja.</p>` : ''}
             <div class="form-grid">
               ${field('cep', 'CEP', 'text', user?.address?.cep || '', '', '00000-000')}
               ${field('street', 'Rua', 'text', user?.address?.street || '', '', '')}
@@ -83,7 +84,7 @@ export function render() {
 
           <div class="checkout-section">
             <h3><span class="step-num">3</span> Método de entrega</h3>
-            ${user ? `
+            ${wholesale ? `
               <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
                 <label class="shipping-option ${selectedShipping?.type === 'retirada' ? 'active' : ''}" data-delivery-toggle="retirada" style="flex:1;min-width:200px;">
                   <span class="shipping-option-left">
@@ -110,7 +111,7 @@ export function render() {
             <div class="infinitepay-note">
               <div class="infinitepay-note-icon">${icon('shield')}</div>
               <div>
-                ${user ? `
+                ${wholesale ? `
                   <strong>Pagamento via Pix</strong>
                   <p>Ao confirmar, vamos gerar um <strong>QR code Pix</strong> na própria tela do pedido — é só escanear ou usar o código copia e cola no app do seu banco. A confirmação é automática assim que o pagamento cai.</p>
                 ` : `
@@ -119,7 +120,7 @@ export function render() {
                 `}
               </div>
             </div>
-            ${!user ? `<div id="mp-brick-container" style="margin-top:16px;"></div>` : ''}
+            ${!wholesale ? `<div id="mp-brick-container" style="margin-top:16px;"></div>` : ''}
           </div>
         </div>
 
@@ -131,8 +132,8 @@ export function render() {
               <div class="info"><strong>${escapeHtml(i.name)}</strong>Tam ${i.size} &middot; ${escapeHtml(i.color)} &middot; Qtd ${i.qty}<br>${formatBRL(i.price * i.qty)}</div>
             </div>`).join('')}
           <div id="checkout-totals">${renderTotals()}</div>
-          ${user && getCount() < WHOLESALE_MIN_QTY ? `<p class="form-hint" style="color:var(--color-error);">Faltam ${WHOLESALE_MIN_QTY - getCount()} peça${WHOLESALE_MIN_QTY - getCount() > 1 ? 's' : ''} para atingir o pedido mínimo do atacado (${WHOLESALE_MIN_QTY} peças). <a href="#/produtos">Voltar aos produtos</a>.</p>` : ''}
-          <button type="submit" id="checkout-submit-btn" class="btn btn-primary btn-block" style="margin-top:16px;" ${user && getCount() < WHOLESALE_MIN_QTY ? 'disabled' : ''}>${user ? 'Confirmar pedido' : 'Ir para pagamento'}</button>
+          ${wholesale && getCount() < WHOLESALE_MIN_QTY ? `<p class="form-hint" style="color:var(--color-error);">Faltam ${WHOLESALE_MIN_QTY - getCount()} peça${WHOLESALE_MIN_QTY - getCount() > 1 ? 's' : ''} para atingir o pedido mínimo do atacado (${WHOLESALE_MIN_QTY} peças). <a href="#/produtos">Voltar aos produtos</a>.</p>` : ''}
+          <button type="submit" id="checkout-submit-btn" class="btn btn-primary btn-block" style="margin-top:16px;" ${wholesale && getCount() < WHOLESALE_MIN_QTY ? 'disabled' : ''}>${wholesale ? 'Confirmar pedido' : 'Ir para pagamento'}</button>
         </aside>
       </div>
     </form>
@@ -221,7 +222,7 @@ export function afterRender() {
   document.querySelectorAll('[data-delivery-toggle]').forEach((label) => {
     label.addEventListener('click', () => applyDeliveryMethod(label.getAttribute('data-delivery-toggle')));
   });
-  if (getCurrentUser() && selectedShipping?.type === 'retirada') {
+  if (isWholesale() && selectedShipping?.type === 'retirada') {
     setAddressRequired(false);
   }
 
@@ -298,7 +299,7 @@ export function afterRender() {
       document.getElementById('f-cep').focus();
       return;
     }
-    if (getCurrentUser() && getCount() < WHOLESALE_MIN_QTY) {
+    if (isWholesale() && getCount() < WHOLESALE_MIN_QTY) {
       showToast(`O pedido mínimo do atacado é ${WHOLESALE_MIN_QTY} peças.`, 'error');
       return;
     }
@@ -324,7 +325,7 @@ export function afterRender() {
         createdOrder = order;
       }
 
-      if (getCurrentUser()) {
+      if (isWholesale()) {
         // Cliente atacadista: cobrança Pix direta, sem sair do site - a
         // própria página do pedido mostra o QR code e fica aguardando a
         // confirmação automática (webhook).

@@ -42,7 +42,7 @@ export function render(params, query = {}) {
   <div class="auth-page">
     <div class="auth-card">
       <h1>Entrar</h1>
-      <p class="section-sub">Acesse sua conta atacadista para ver os preços de atacado e acompanhar seus pedidos.</p>
+      <p class="section-sub">Acesse sua conta para acompanhar seus pedidos e, se você for atacadista, ver os preços exclusivos.</p>
       <form id="login-form">
         <div class="form-field">
           <label for="login-email">E-mail</label>
@@ -58,7 +58,7 @@ export function render(params, query = {}) {
         <button type="submit" class="btn btn-primary btn-block">Entrar</button>
       </form>
       <div class="auth-divider">ou</div>
-      <p class="auth-switch">Ainda não tem conta de atacado? <a href="#/atacado" class="btn-link">Cadastre-se gratuitamente</a></p>
+      <p class="auth-switch">Ainda não tem conta? <a href="#/cadastro" class="btn-link">Cadastre-se gratuitamente</a></p>
     </div>
   </div>`;
 }

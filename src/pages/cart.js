@@ -6,7 +6,7 @@ import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 import { showToast } from '../components/toast.js';
 import { getItem, setItem } from '../utils/storage.js';
-import { getCurrentUser, WHOLESALE_MIN_QTY } from '../context/authStore.js';
+import { isWholesale, WHOLESALE_MIN_QTY } from '../context/authStore.js';
 
 let chosenShipping = getItem('shippingChoice', null);
 
@@ -81,7 +81,7 @@ function summaryHtml() {
   const { discount, shippingDiscount } = applyCouponToTotal(coupon, subtotal, shippingPrice);
   const finalShipping = Math.max(shippingPrice - shippingDiscount, 0);
   const total = Math.max(subtotal - discount + finalShipping, 0);
-  const missingQty = getCurrentUser() ? Math.max(WHOLESALE_MIN_QTY - getCount(), 0) : 0;
+  const missingQty = isWholesale() ? Math.max(WHOLESALE_MIN_QTY - getCount(), 0) : 0;
 
   return `
     <h3>Resumo do pedido</h3>

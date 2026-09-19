@@ -60,7 +60,7 @@ function toPublicCustomer(row) {
 }
 
 async function handleRegister(res, body) {
-  const { docType, docNumber, fullName, storeName, phone, email, password, address } = body;
+  const { docType, docNumber, fullName, storeName, phone, email, password, address, wholesale } = body;
 
   if (!fullName || !String(fullName).trim()) return sendJson(res, 400, { error: 'Informe o nome completo / razão social.' });
   if (!email || !isValidEmail(email)) return sendJson(res, 400, { error: 'Informe um e-mail válido.' });
@@ -88,14 +88,20 @@ async function handleRegister(res, body) {
     phone: phone ? String(phone).trim() : '',
     address: address || {},
   };
+  // wholesale === false: cliente quer só comprar no varejo - a conta é
+  // criada normalmente (login, Minha Conta, pedidos), mas já nasce com o
+  // preço de atacado desativado (mesmo campo/efeito que o painel usa pra
+  // desativar depois - ver handleAdminSetStatus). Por padrão (campo
+  // ausente) continua ativa, pra não quebrar nenhum outro chamador.
+  const status = wholesale === false ? 'inactive' : 'active';
 
   await sql`
-    INSERT INTO wholesale_customers (id, email, password_hash, doc_type, doc_number, data)
-    VALUES (${id}, ${cleanEmail}, ${passwordHash}, ${docType}, ${cleanDoc}, ${JSON.stringify(data)}::jsonb)
+    INSERT INTO wholesale_customers (id, email, password_hash, doc_type, doc_number, data, status)
+    VALUES (${id}, ${cleanEmail}, ${passwordHash}, ${docType}, ${cleanDoc}, ${JSON.stringify(data)}::jsonb, ${status})
   `;
 
   const token = issueCustomerToken(id);
-  return sendJson(res, 201, { token, customer: { id, email: cleanEmail, docType, docNumber: cleanDoc, ...data } });
+  return sendJson(res, 201, { token, customer: { id, email: cleanEmail, docType, docNumber: cleanDoc, status, ...data } });
 }
 
 async function handleLogin(res, body) {
