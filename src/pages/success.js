@@ -35,7 +35,8 @@ export async function render(params) {
 }
 
 function renderOrderHtml(order) {
-  const eta = order.shipping?.days ? `${order.shipping.days} dias úteis` : 'a confirmar';
+  const isPickup = order.shipping?.type === 'retirada';
+  const eta = isPickup ? 'Disponível para retirada assim que o pagamento for confirmado' : (order.shipping?.days ? `${order.shipping.days} dias úteis` : 'a confirmar');
   const paymentLabel = PAYMENT_LABELS[order.payment.method] || order.payment.method;
   const isPaid = order.payment.status === 'pago';
   const awaitingPix = !isPaid && order.payment.pixQrCode;
@@ -64,8 +65,8 @@ function renderOrderHtml(order) {
       <div class="order-card-row"><span>Itens</span><span>${order.items.reduce((s, i) => s + i.qty, 0)} peça(s)</span></div>
       <div class="order-card-row"><span>Forma de pagamento</span><span>${escapeHtml(paymentLabel)}</span></div>
       <div class="order-card-row"><span>Status do pagamento</span><span style="color:${isPaid ? 'var(--color-success)' : 'var(--color-text-soft)'};font-weight:600;">${isPaid ? 'Pago' : 'Aguardando confirmação'}</span></div>
-      <div class="order-card-row"><span>Endereço de entrega</span><span style="text-align:right;">${escapeHtml(order.address.street)}, ${escapeHtml(order.address.number)} — ${escapeHtml(order.address.city)}/${escapeHtml(order.address.state)}</span></div>
-      <div class="order-card-row"><span>Previsão de entrega</span><span>${eta}</span></div>
+      <div class="order-card-row"><span>${isPickup ? 'Entrega' : 'Endereço de entrega'}</span><span style="text-align:right;">${isPickup ? 'Retirada na loja' : `${escapeHtml(order.address.street)}, ${escapeHtml(order.address.number)} — ${escapeHtml(order.address.city)}/${escapeHtml(order.address.state)}`}</span></div>
+      <div class="order-card-row"><span>${isPickup ? 'Disponibilidade' : 'Previsão de entrega'}</span><span>${eta}</span></div>
       <div class="order-card-row"><span>Subtotal</span><span>${formatBRL(order.subtotal)}</span></div>
       ${order.discount > 0 ? `<div class="order-card-row"><span>Desconto</span><span>- ${formatBRL(order.discount)}</span></div>` : ''}
       <div class="order-card-row"><span>Frete</span><span>${order.shippingPrice === 0 ? 'Grátis' : formatBRL(order.shippingPrice)}</span></div>

@@ -11,6 +11,8 @@ import { setItem, getItem } from '../utils/storage.js';
 import { isValidCpf, isValidCnpj, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
 import { navigate } from '../router.js';
 
+const RETIRADA_SHIPPING = { type: 'retirada', label: 'Retirada na loja', price: 0, days: 0 };
+
 let shippingOptions = [];
 let selectedShipping = getItem('shippingChoice', null);
 // Guarda o pedido já criado no banco, pra não criar um segundo pedido
@@ -65,8 +67,9 @@ export function render() {
             <p class="form-hint">O CPF é exigido pelos Correios para a emissão da etiqueta de envio.</p>
           </div>
 
-          <div class="checkout-section">
+          <div class="checkout-section" id="address-section">
             <h3><span class="step-num">2</span> Endereço de entrega</h3>
+            ${user ? `<p class="form-hint" id="address-optional-note" style="display:none;">Não é necessário preencher o endereço para retirada na loja.</p>` : ''}
             <div class="form-grid">
               ${field('cep', 'CEP', 'text', user?.address?.cep || '', '', '00000-000')}
               ${field('street', 'Rua', 'text', user?.address?.street || '', '', '')}
@@ -80,6 +83,23 @@ export function render() {
 
           <div class="checkout-section">
             <h3><span class="step-num">3</span> Método de entrega</h3>
+            ${user ? `
+              <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+                <label class="shipping-option ${selectedShipping?.type === 'retirada' ? 'active' : ''}" data-delivery-toggle="retirada" style="flex:1;min-width:200px;">
+                  <span class="shipping-option-left">
+                    <input type="radio" name="delivery-method" value="retirada" ${selectedShipping?.type === 'retirada' ? 'checked' : ''} />
+                    <span><span class="shipping-option-name">Retirar na loja</span><span class="shipping-option-days" style="display:block;">Sem custo de frete</span></span>
+                  </span>
+                  <span class="shipping-option-price">Grátis</span>
+                </label>
+                <label class="shipping-option ${selectedShipping?.type !== 'retirada' ? 'active' : ''}" data-delivery-toggle="envio" style="flex:1;min-width:200px;">
+                  <span class="shipping-option-left">
+                    <input type="radio" name="delivery-method" value="envio" ${selectedShipping?.type !== 'retirada' ? 'checked' : ''} />
+                    <span><span class="shipping-option-name">Receber em casa</span><span class="shipping-option-days" style="display:block;">Calculado pelo CEP</span></span>
+                  </span>
+                </label>
+              </div>
+            ` : ''}
             <div id="checkout-shipping-options">
               <p class="form-hint">Informe o CEP acima para ver as opções de frete disponíveis.</p>
             </div>
@@ -155,10 +175,55 @@ function renderTotals() {
     <div class="summary-row total"><span>Total</span><span>${formatBRL(total)}</span></div>`;
 }
 
+const ADDRESS_FIELD_NAMES = ['cep', 'street', 'number', 'neighborhood', 'city', 'state'];
+
+function setAddressRequired(required) {
+  ADDRESS_FIELD_NAMES.forEach((name) => {
+    const input = document.querySelector(`[name="${name}"]`);
+    if (!input) return;
+    input.toggleAttribute('required', required);
+    input.disabled = !required;
+    input.closest('.form-field')?.classList.remove('invalid');
+  });
+  const note = document.getElementById('address-optional-note');
+  if (note) note.style.display = required ? 'none' : '';
+  const section = document.getElementById('address-section');
+  if (section) section.style.opacity = required ? '' : '0.55';
+}
+
+function applyDeliveryMethod(mode) {
+  const shippingEl = document.getElementById('checkout-shipping-options');
+  document.querySelectorAll('[data-delivery-toggle]').forEach((label) => {
+    const isActive = label.getAttribute('data-delivery-toggle') === mode;
+    label.classList.toggle('active', isActive);
+    label.querySelector('input').checked = isActive;
+  });
+
+  if (mode === 'retirada') {
+    selectedShipping = RETIRADA_SHIPPING;
+    setItem('shippingChoice', selectedShipping);
+    setAddressRequired(false);
+    shippingEl.innerHTML = `<div class="coupon-feedback success">${icon('checkCircle', 'icon icon-sm')} Retirada na loja selecionada — sem custo de frete.</div>`;
+  } else {
+    selectedShipping = null;
+    setItem('shippingChoice', null);
+    setAddressRequired(true);
+    shippingEl.innerHTML = `<p class="form-hint">Informe o CEP acima para ver as opções de frete disponíveis.</p>`;
+  }
+  document.getElementById('checkout-totals').innerHTML = renderTotals();
+}
+
 export function afterRender() {
   document.title = 'Checkout | GRATITUDE TÊXTIL';
   if (!getItems().length) return;
   createdOrder = null;
+
+  document.querySelectorAll('[data-delivery-toggle]').forEach((label) => {
+    label.addEventListener('click', () => applyDeliveryMethod(label.getAttribute('data-delivery-toggle')));
+  });
+  if (getCurrentUser() && selectedShipping?.type === 'retirada') {
+    setAddressRequired(false);
+  }
 
   const cpfInput = document.getElementById('f-cpf');
   cpfInput?.addEventListener('input', () => {
@@ -167,7 +232,7 @@ export function afterRender() {
 
   const cepInput = document.getElementById('f-cep');
   cepInput?.addEventListener('blur', async () => {
-    if (!isValidCep(cepInput.value)) return;
+    if (cepInput.disabled || !isValidCep(cepInput.value)) return;
     const el = document.getElementById('checkout-shipping-options');
     el.innerHTML = `<p class="form-hint">Calculando frete...</p>`;
 
@@ -351,7 +416,7 @@ function buildOrder(data) {
     date: new Date().toISOString(),
     items,
     customer: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, document: onlyDigits(data.cpf) },
-    address: { cep: data.cep, street: data.street, number: data.number, complement: data.complement, neighborhood: data.neighborhood, city: data.city, state: data.state },
+    address: selectedShipping?.type === 'retirada' ? null : { cep: data.cep, street: data.street, number: data.number, complement: data.complement, neighborhood: data.neighborhood, city: data.city, state: data.state },
     shipping: selectedShipping,
     payment: { method: 'mercadopago', status: 'aguardando confirmação' },
     coupon,
