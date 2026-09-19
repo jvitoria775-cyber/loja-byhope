@@ -13,6 +13,11 @@ import { invalidateCatalogCache } from '../services/catalogService.js';
 
 const SESSION_KEY = 'wholesale_session'; // { token, customer }
 
+// Pedido mínimo do atacado (em peças, somando todos os itens do
+// carrinho) - decisão do negócio, aplicada só no checkout self-service da
+// loja online (o PDV, com atendente, não tem essa trava).
+export const WHOLESALE_MIN_QTY = 5;
+
 export function getCurrentUser() {
   const session = getItem(SESSION_KEY, null);
   return session?.customer || null;

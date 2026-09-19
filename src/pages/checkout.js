@@ -1,4 +1,4 @@
-import { getItems, getSubtotal, getCoupon, clearCart } from '../context/cartStore.js';
+import { getItems, getSubtotal, getCount, getCoupon, clearCart } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
 import { calculateShipping, isValidCep } from '../services/shippingService.js';
 import { createCheckoutLink, createPixCharge } from '../services/paymentService.js';
@@ -6,7 +6,7 @@ import { formatBRL } from '../utils/format.js';
 import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 import { showToast } from '../components/toast.js';
-import { getCurrentUser, getToken } from '../context/authStore.js';
+import { getCurrentUser, getToken, WHOLESALE_MIN_QTY } from '../context/authStore.js';
 import { setItem, getItem } from '../utils/storage.js';
 import { isValidCpf, isValidCnpj, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
 import { navigate } from '../router.js';
@@ -106,7 +106,8 @@ export function render() {
               <div class="info"><strong>${escapeHtml(i.name)}</strong>Tam ${i.size} &middot; ${escapeHtml(i.color)} &middot; Qtd ${i.qty}<br>${formatBRL(i.price * i.qty)}</div>
             </div>`).join('')}
           <div id="checkout-totals">${renderTotals()}</div>
-          <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px;">Confirmar pedido</button>
+          ${user && getCount() < WHOLESALE_MIN_QTY ? `<p class="form-hint" style="color:var(--color-error);">Faltam ${WHOLESALE_MIN_QTY - getCount()} peça${WHOLESALE_MIN_QTY - getCount() > 1 ? 's' : ''} para atingir o pedido mínimo do atacado (${WHOLESALE_MIN_QTY} peças). <a href="#/produtos">Voltar aos produtos</a>.</p>` : ''}
+          <button type="submit" class="btn btn-primary btn-block" style="margin-top:16px;" ${user && getCount() < WHOLESALE_MIN_QTY ? 'disabled' : ''}>Confirmar pedido</button>
         </aside>
       </div>
     </form>
@@ -224,6 +225,10 @@ export function afterRender() {
     if (!selectedShipping) {
       showToast('Selecione uma opção de frete para continuar.', 'error');
       document.getElementById('f-cep').focus();
+      return;
+    }
+    if (getCurrentUser() && getCount() < WHOLESALE_MIN_QTY) {
+      showToast(`O pedido mínimo do atacado é ${WHOLESALE_MIN_QTY} peças.`, 'error');
       return;
     }
 

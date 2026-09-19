@@ -1,4 +1,4 @@
-import { getItems, getSubtotal, updateQty, removeItem, getCoupon, applyCoupon, removeCoupon } from '../context/cartStore.js';
+import { getItems, getSubtotal, getCount, updateQty, removeItem, getCoupon, applyCoupon, removeCoupon } from '../context/cartStore.js';
 import { applyCouponToTotal } from '../services/couponService.js';
 import { calculateShipping, isValidCep } from '../services/shippingService.js';
 import { formatBRL } from '../utils/format.js';
@@ -6,6 +6,7 @@ import { escapeHtml } from '../utils/dom.js';
 import { icon } from '../components/icons.js';
 import { showToast } from '../components/toast.js';
 import { getItem, setItem } from '../utils/storage.js';
+import { getCurrentUser, WHOLESALE_MIN_QTY } from '../context/authStore.js';
 
 let chosenShipping = getItem('shippingChoice', null);
 
@@ -80,6 +81,7 @@ function summaryHtml() {
   const { discount, shippingDiscount } = applyCouponToTotal(coupon, subtotal, shippingPrice);
   const finalShipping = Math.max(shippingPrice - shippingDiscount, 0);
   const total = Math.max(subtotal - discount + finalShipping, 0);
+  const missingQty = getCurrentUser() ? Math.max(WHOLESALE_MIN_QTY - getCount(), 0) : 0;
 
   return `
     <h3>Resumo do pedido</h3>
@@ -95,7 +97,8 @@ function summaryHtml() {
     <div class="summary-row"><span>Frete${chosenShipping ? ` (${chosenShipping.label})` : ''}</span><span>${chosenShipping ? (finalShipping === 0 ? 'Grátis' : formatBRL(finalShipping)) : 'A calcular'}</span></div>
     <div class="summary-row total"><span>Total</span><span>${formatBRL(total)}</span></div>
 
-    <button class="btn btn-primary btn-block" id="cart-checkout-btn" style="margin-top:16px;">Ir para o checkout ${icon('arrowRight', 'icon icon-sm')}</button>
+    ${missingQty > 0 ? `<p class="form-hint" style="color:var(--color-error);margin-top:10px;">Faltam ${missingQty} peça${missingQty > 1 ? 's' : ''} para atingir o pedido mínimo do atacado (${WHOLESALE_MIN_QTY} peças).</p>` : ''}
+    <button class="btn btn-primary btn-block" id="cart-checkout-btn" style="margin-top:16px;" ${missingQty > 0 ? 'disabled' : ''}>Ir para o checkout ${icon('arrowRight', 'icon icon-sm')}</button>
     <a href="#/produtos" class="btn btn-outline btn-block" style="margin-top:10px;">Continuar comprando</a>
   `;
 }
