@@ -24,7 +24,7 @@ export function render() {
       : user
       ? `<div><p class="form-hint" style="margin-bottom:10px;">Sua conta ainda não tem acesso aos preços de atacado.</p><a href="#/contato" class="btn btn-primary" style="padding:16px 34px;">Falar com a loja</a></div>`
       : `<div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
-          <a href="#/cadastro" class="btn btn-primary" style="padding:16px 34px;">Quero comprar no atacado</a>
+          <a href="#/cadastro?tipo=atacado" class="btn btn-primary" style="padding:16px 34px;">Quero comprar no atacado</a>
           <a href="#/login" class="btn btn-outline" style="padding:16px 34px;">Já tenho conta</a>
         </div>`}
 

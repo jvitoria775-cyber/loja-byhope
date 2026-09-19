@@ -9,7 +9,7 @@ const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT'
 let docType = 'cpf';
 let accountType = 'wholesale';
 
-export function render() {
+export function render(params, query = {}) {
   const user = getCurrentUser();
   if (user) {
     const wholesale = user.status !== 'inactive';
@@ -23,17 +23,24 @@ export function render() {
     </div>`;
   }
 
+  // Só quem chega pelo botão "Quero comprar no atacado" (link com
+  // ?tipo=atacado) vê a opção de virar cliente atacadista. Quem chega
+  // pelo cadastro genérico (Entrar > Cadastre-se) cai direto num
+  // cadastro simples de varejo (só CPF, sem CNPJ/nome da loja) - evita
+  // confundir cliente final com um formulário pensado pra revendedor.
+  const startWholesale = query.tipo === 'atacado';
   docType = 'cpf';
-  accountType = 'wholesale';
+  accountType = startWholesale ? 'wholesale' : 'retail';
 
   return `
   <div class="auth-page auth-page-wide">
     <div class="auth-card">
-      <div style="text-align:center;margin-bottom:14px;"><span class="wholesale-badge" id="reg-badge">Cadastro de cliente atacadista</span></div>
-      <h1 id="reg-title">Comprar no Atacado</h1>
-      <p class="section-sub" id="reg-subtitle">Crie sua conta gratuita para desbloquear os preços de atacado da Gratitude Têxtil.</p>
+      <div style="text-align:center;margin-bottom:14px;"><span class="wholesale-badge" id="reg-badge">${startWholesale ? 'Cadastro de cliente atacadista' : 'Cadastro de cliente'}</span></div>
+      <h1 id="reg-title">${startWholesale ? 'Comprar no Atacado' : 'Criar minha conta'}</h1>
+      <p class="section-sub" id="reg-subtitle">${startWholesale ? 'Crie sua conta gratuita para desbloquear os preços de atacado da Gratitude Têxtil.' : 'Crie sua conta gratuita para acompanhar seus pedidos na Gratitude Têxtil.'}</p>
 
       <form id="register-form" novalidate>
+        ${startWholesale ? `
         <p class="form-section-title">Como você vai comprar?</p>
         <div class="doc-type-toggle" id="account-type-toggle">
           <button type="button" data-account-type="wholesale" class="active">Atacado (revenda)</button>
@@ -46,6 +53,7 @@ export function render() {
           <button type="button" data-doc-type="cnpj">Pessoa Jurídica (CNPJ)</button>
         </div>
         <input type="hidden" name="docType" id="reg-doc-type-input" value="cpf" />
+        ` : ''}
 
         <p class="form-section-title">Seus dados</p>
         <div class="form-grid">
@@ -59,10 +67,11 @@ export function render() {
             <input type="text" id="reg-doc" name="docNumber" required placeholder="000.000.000-00" inputmode="numeric" />
             <span class="error-msg" id="reg-doc-error">CPF inválido.</span>
           </div>
+          ${startWholesale ? `
           <div class="form-field" data-field="storeName" id="store-name-field">
             <label for="reg-store">Nome da loja</label>
             <input type="text" id="reg-store" name="storeName" placeholder="Nome da sua loja (opcional)" />
-          </div>
+          </div>` : ''}
           <div class="form-field full" data-field="phone">
             <label for="reg-phone">Telefone / WhatsApp</label>
             <input type="tel" id="reg-phone" name="phone" required placeholder="(11) 91234-5678" />
@@ -130,7 +139,7 @@ export function render() {
           </div>
         </div>
 
-        <button type="submit" id="reg-submit-btn" class="btn btn-primary btn-block" style="margin-top:8px;">Criar minha conta atacadista</button>
+        <button type="submit" id="reg-submit-btn" class="btn btn-primary btn-block" style="margin-top:8px;">${startWholesale ? 'Criar minha conta atacadista' : 'Criar minha conta'}</button>
       </form>
       <p class="auth-switch">Já tem conta? <a href="#/login" class="btn-link">Entrar</a></p>
     </div>
@@ -187,8 +196,8 @@ function setDocType(type) {
 }
 
 export function afterRender() {
-  document.title = 'Comprar no Atacado | GRATITUDE TÊXTIL';
-  if (getCurrentUser()) return;
+  if (getCurrentUser()) { document.title = 'Minha Conta | GRATITUDE TÊXTIL'; return; }
+  document.title = `${document.getElementById('reg-title')?.textContent || 'Criar conta'} | GRATITUDE TÊXTIL`;
 
   document.querySelectorAll('#account-type-toggle [data-account-type]').forEach((btn) => {
     btn.addEventListener('click', () => setAccountType(btn.getAttribute('data-account-type')));
