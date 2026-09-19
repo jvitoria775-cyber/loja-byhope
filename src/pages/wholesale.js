@@ -16,8 +16,7 @@ export function render() {
   <div class="container" style="max-width:880px;margin:60px auto 100px;padding:0 20px;text-align:center;">
     <span class="wholesale-badge">${icon('store', 'icon icon-sm')} Para lojistas e revendedores</span>
     <h1 style="font-size:34px;margin:18px 0 12px;">Compre no atacado com a Gratitude Têxtil</h1>
-    <p class="section-sub" style="max-width:560px;margin:0 auto 12px;">Crie sua conta gratuita de cliente atacadista e tenha acesso aos preços exclusivos para revenda em todo o nosso catálogo.</p>
-    <p style="font-size:13.5px;color:var(--color-text-soft);margin:0 0 30px;">Pedido mínimo: 5 peças (pode combinar modelos, cores e tamanhos à vontade).</p>
+    <p class="section-sub" style="max-width:560px;margin:0 auto 30px;">Crie sua conta gratuita de cliente atacadista e tenha acesso aos preços exclusivos para revenda em todo o nosso catálogo.</p>
 
     ${user
       ? `<a href="#/produtos" class="btn btn-primary" style="padding:16px 34px;">Ver produtos com preço de atacado</a>`
@@ -25,6 +24,8 @@ export function render() {
           <a href="#/cadastro" class="btn btn-primary" style="padding:16px 34px;">Quero comprar no atacado</a>
           <a href="#/login" class="btn btn-outline" style="padding:16px 34px;">Já tenho conta</a>
         </div>`}
+
+    <span class="wholesale-badge" style="margin-top:18px;">${icon('package', 'icon icon-sm')} Pedido mínimo de 5 peças — combine cores, tamanhos e modelos à vontade</span>
 
     <div class="strip-grid" style="margin-top:64px;text-align:center;">
       ${BENEFITS.map((b) => `
