@@ -5,6 +5,7 @@ import { escapeHtml } from '../utils/dom.js';
 import { isValidCpf, isValidCnpj, isValidEmail, formatCpf, formatCnpj, onlyDigits } from '../utils/validators.js';
 import { lookupCep } from '../services/cepService.js';
 import { isValidCep } from '../services/shippingService.js';
+import { attachPasswordToggle } from '../components/passwordToggle.js';
 
 const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
@@ -200,6 +201,9 @@ function setDocType(type) {
 export function afterRender() {
   if (getCurrentUser()) { document.title = 'Minha Conta | GRATITUDE TÊXTIL'; return; }
   document.title = `${document.getElementById('reg-title')?.textContent || 'Criar conta'} | GRATITUDE TÊXTIL`;
+
+  attachPasswordToggle('reg-password');
+  attachPasswordToggle('reg-confirm');
 
   document.querySelectorAll('#account-type-toggle [data-account-type]').forEach((btn) => {
     btn.addEventListener('click', () => setAccountType(btn.getAttribute('data-account-type')));

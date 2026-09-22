@@ -1,2 +1,8 @@
 .vercel
 .env*
+node_modules
+
+# Config local de ferramentas MCP (Claude Code) - específico desta máquina,
+# não faz parte do site.
+.mcp.json
+google-flow-mcp/

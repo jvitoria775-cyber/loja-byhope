@@ -493,6 +493,14 @@ p { margin: 0; }
 }
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: var(--color-accent-dark); }
 .form-field .error-msg { color: var(--color-error); font-size: 12px; margin-top: 5px; display: none; }
+.password-field-wrap { position: relative; }
+.password-field-wrap input { padding-right: 42px; }
+.password-toggle-btn {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border: none; background: transparent; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; color: var(--color-text-soft); cursor: pointer;
+}
+.password-toggle-btn:hover { background: var(--color-bg-alt); }
 .form-field.invalid input, .form-field.invalid select { border-color: var(--color-error); }
 .form-field.invalid .error-msg { display: block; }
 .form-hint { font-size: 12px; color: var(--color-text-faint); margin-top: 5px; }

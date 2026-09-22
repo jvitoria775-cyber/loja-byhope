@@ -2,6 +2,7 @@ import { login, getCurrentUser, requestPasswordReset, resetPassword } from '../c
 import { showToast } from '../components/toast.js';
 import { navigate } from '../router.js';
 import { escapeHtml } from '../utils/dom.js';
+import { attachPasswordToggle } from '../components/passwordToggle.js';
 
 export function render(params, query = {}) {
   const user = getCurrentUser();
@@ -73,6 +74,8 @@ export function afterRender(params, query = {}) {
     return;
   }
 
+  attachPasswordToggle('login-password');
+
   document.getElementById('login-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
@@ -99,6 +102,8 @@ export function afterRender(params, query = {}) {
 
 function bindResetForm(token) {
   document.title = 'Redefinir senha | GRATITUDE TÊXTIL';
+  attachPasswordToggle('reset-password');
+  attachPasswordToggle('reset-confirm');
   document.getElementById('reset-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const password = document.getElementById('reset-password').value;

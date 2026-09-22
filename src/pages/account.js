@@ -4,6 +4,7 @@ import { navigate } from '../router.js';
 import { escapeHtml } from '../utils/dom.js';
 import { formatBRL, formatDate } from '../utils/format.js';
 import { icon } from '../components/icons.js';
+import { attachPasswordToggle } from '../components/passwordToggle.js';
 
 const STATES = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
 
@@ -195,6 +196,10 @@ function senhaTabHtml() {
 export function afterRender() {
   document.title = 'Minha Conta | GRATITUDE TÊXTIL';
   if (!getCurrentUser() || !account) return;
+
+  attachPasswordToggle('acc-current-password');
+  attachPasswordToggle('acc-new-password');
+  attachPasswordToggle('acc-new-password-confirm');
 
   document.querySelectorAll('#account-tabs button').forEach((btn) => {
     btn.addEventListener('click', () => {
