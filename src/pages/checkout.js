@@ -387,7 +387,11 @@ async function mountPaymentBrick(order) {
         paymentMethods: { creditCard: 'all', debitCard: 'all', bankTransfer: 'all' },
       },
       callbacks: {
-        onError: () => showToast('Não foi possível carregar o formulário de pagamento.', 'error'),
+        onReady: () => {},
+        onError: (err) => {
+          console.error('Payment Brick error:', err);
+          showToast('Não foi possível carregar o formulário de pagamento. Atualize a página e tente de novo.', 'error');
+        },
         onSubmit: ({ selectedPaymentMethod, formData }) => new Promise((resolve, reject) => {
           createOrder({ orderId: order.id, selectedPaymentMethod, formData })
             .then(() => {
