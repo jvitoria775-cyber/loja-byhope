@@ -14,14 +14,22 @@ import { maybeAutoPurchaseLabel } from './_melhorEnvio.js';
 // POST { action: 'create-pix-charge', orderId } - público, cliente
 // atacadista: cria uma cobrança Pix direta (sem Brick, sem token) pro
 // pedido já salvo, devolve QR code + copia-e-cola.
-// POST sem "action" - webhook do Mercado Pago: confirma o pagamento
-// (sempre re-consultando a API deles, nunca confiando só no corpo da
-// notificação) e dispara a geração automática da etiqueta.
+// POST { type: 'order', data: { id }, ... } - webhook do Mercado Pago:
+// confirma o pagamento (sempre re-consultando a API deles, nunca
+// confiando só no corpo da notificação) e dispara a geração automática
+// da etiqueta.
 //
 // Em todos os casos de criação de cobrança, o valor/itens/cliente vêm do
 // PEDIDO JÁ SALVO no banco (buscado por orderId), nunca de dados soltos
 // que o navegador mandasse na hora - assim ninguém consegue manipular o
 // valor cobrado alterando a requisição.
+//
+// IMPORTANTE: o payload real do webhook do Mercado Pago também tem um
+// campo "action" (ex: "order.processed") - por isso a rota do webhook
+// não pode ser "quando não vier action nenhum" (bug real, encontrado
+// testando com um pedido de verdade: a notificação real caía direto no
+// "Ação inválida" antes de sequer checar a assinatura). A distinção
+// certa é o campo "type" - só a Mercado Pago manda "type: order".
 export default async function handler(req, res) {
   if (handlePreflight(req, res)) return;
   if (req.method !== 'POST') return sendJson(res, 405, { error: 'Método não permitido.' });
@@ -30,7 +38,7 @@ export default async function handler(req, res) {
 
   if (body.action === 'create-order') return handleCreateOrder(res, body);
   if (body.action === 'create-pix-charge') return handleCreatePixCharge(res, body);
-  if (!body.action) return handleWebhook(req, res, body);
+  if (body.type === 'order') return handleWebhook(req, res, body);
 
   return sendJson(res, 400, { error: 'Ação inválida.' });
 }
