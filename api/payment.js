@@ -116,7 +116,7 @@ async function handleCreateOrder(res, body) {
     order.payment.mpOrderId = mpOrderId;
     order.payment.statusDetail = statusDetail;
 
-    if (paymentStatus === 'approved') {
+    if (paymentStatus === 'processed') {
       markPaid(order);
       await maybeAutoPurchaseLabel(order);
       await saveOrder(order);
@@ -124,10 +124,11 @@ async function handleCreateOrder(res, body) {
     }
 
     await saveOrder(order);
-    if (paymentStatus === 'rejected') {
+    if (paymentStatus === 'failed') {
       return sendJson(res, 402, { error: cardRejectionMessage(statusDetail) });
     }
-    // in_process/pending (raro em cartão, mas possível em alguns emissores)
+    // created/processing/in_process/action_required etc. (raro em
+    // cartão, mas possível em alguns emissores - ex.: 3DS)
     return sendJson(res, 200, { paid: false, pending: true });
   } catch (err) {
     return sendJson(res, 502, { error: err.message || 'Não foi possível processar o pagamento.' });
@@ -188,10 +189,13 @@ async function handleWebhook(req, res, body) {
   const paymentStatus = mpOrder.transactions?.payments?.[0]?.status;
   order.payment = order.payment || {};
 
-  if (paymentStatus === 'approved' && order.payment.status !== 'pago') {
+  if (paymentStatus === 'processed' && order.payment.status !== 'pago') {
     markPaid(order);
     await maybeAutoPurchaseLabel(order);
-  } else if ((paymentStatus === 'rejected' || paymentStatus === 'cancelled') && order.payment.status !== 'pago') {
+  } else if (
+    (paymentStatus === 'failed' || paymentStatus === 'canceled' || paymentStatus === 'expired')
+    && order.payment.status !== 'pago'
+  ) {
     order.payment.status = 'cancelado';
   }
 
