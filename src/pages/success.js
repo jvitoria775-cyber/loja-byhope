@@ -36,9 +36,11 @@ export async function render(params) {
 
 function renderOrderHtml(order) {
   const isPickup = order.shipping?.type === 'retirada';
-  const eta = isPickup ? 'Disponível para retirada assim que o pagamento for confirmado' : (order.shipping?.days ? `${order.shipping.days} dias úteis` : 'a confirmar');
-  const paymentLabel = PAYMENT_LABELS[order.payment.method] || order.payment.method;
   const isPaid = order.payment.status === 'pago';
+  const eta = isPickup
+    ? (isPaid ? 'Já disponível para retirada na loja' : 'Disponível para retirada assim que o pagamento for confirmado')
+    : (order.shipping?.days ? `${order.shipping.days} dias úteis` : 'a confirmar');
+  const paymentLabel = PAYMENT_LABELS[order.payment.method] || order.payment.method;
   const awaitingPix = !isPaid && order.payment.pixQrCode;
 
   return `
